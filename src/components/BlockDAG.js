@@ -20,7 +20,7 @@ const BlockDAGBox = () => {
   const [serverVersion, setServerVersion] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
-  const initBox = useCallback(async () => {
+  const updateBox = useCallback(async () => {
     try {
       const dag_info = await getBlockdagInfo();
       setBlockCount(dag_info.blockCount);
@@ -66,33 +66,14 @@ const BlockDAGBox = () => {
   }, [nextHFDAAScore]);
 
   useEffect(() => {
-    initBox();
-    const updateInterval = setInterval(async () => {
-      const dag_info = await getBlockdagInfo();
-      setBlockCount(dag_info.blockCount);
-      setHeaderCount(dag_info.headerCount);
-      setVirtualDaaScore(dag_info.virtualDaaScore);
-      setDifficulty(dag_info.difficulty * BPS);
-      setHashrate(dag_info.difficulty * 2 * BPS);
-      const unixTimestamp = Math.floor(Date.now() / 1000);
-      const timeToFork = nextHFDAAScore - dag_info.virtualDaaScore;
-      const hardForkTime = new Date((unixTimestamp + timeToFork) * 1000).toUTCString();
-      if (timeToFork > 0) {
-        const hours = Math.floor(timeToFork / 3600);
-        const minutes = Math.floor((timeToFork % 3600) / 60);
-        const seconds = timeToFork % 60;
-        const formattedTimeToFork = `${hours}h ${minutes}m ${seconds}s`;
-        setShowHF(true);
-        setNextHardForkTime(hardForkTime);
-        setNextHardForkTimeTo(formattedTimeToFork);
-      } else {
-        setShowHF(false);
-      }
-    }, 60000);
-    return async () => {
+    updateBox();
+    const updateInterval = setInterval(() => {
+      updateBox();
+    }, 30000);
+    return () => {
       clearInterval(updateInterval);
     };
-  }, [initBox, nextHFDAAScore]);
+  }, [updateBox]);
 
   useEffect(() => {
     const updateInterval = setInterval(async () => {
