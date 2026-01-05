@@ -23,10 +23,8 @@ RUN npm install -g serve
 # Copy the rest of the application code
 COPY . .
 
-RUN npm run build
-
 # Expose port 3000
 EXPOSE 3000
 
 # Command to run explorer
-CMD ["serve", "-s", "build", "-l", "3000"]
+CMD ["sh", "-c", "npm run build && serve -s build -l 3000"]
