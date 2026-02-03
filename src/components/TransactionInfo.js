@@ -124,7 +124,7 @@ const TransactionInfo = () => {
                                 <Tooltip
                                   id="accepted-tooltip"
                                   place="top"
-                                  style={{ maxWidth: "250px", whiteSpace: "normal", wordWrap: "break-word" }}
+                                  style={{ zIndex: 1000, maxWidth: "250px", whiteSpace: "normal", wordWrap: "break-word" }}
                                   content="A transaction may appear as unaccepted for several reasons. First the transaction may be so new that it has not been accepted yet. Second, the explorer's database filler might have missed it while processing the virtual chain. Additionally, when parallel blocks with identical blue scores are created, only one reward transaction is accepted. In rare cases, a double-spend transaction may also be rejected."
                                 />
                               </div>
@@ -134,7 +134,7 @@ const TransactionInfo = () => {
                                 <Tooltip
                                   id="accepted-tooltip"
                                   place="top"
-                                  style={{ maxWidth: "250px", whiteSpace: "normal", wordWrap: "break-word" }}
+                                  style={{ zIndex: 1000, maxWidth: "250px", whiteSpace: "normal", wordWrap: "break-word" }}
                                   content="A transaction may appear as unaccepted for several reasons. First the transaction may be so new that it has not been accepted yet. Second, the explorer's database filler might have missed it while processing the virtual chain. Additionally, when parallel blocks with identical blue scores are created, only one reward transaction is accepted. In rare cases, a double-spend transaction may also be rejected."
                                 />
                               </div>
@@ -149,7 +149,7 @@ const TransactionInfo = () => {
                                   <Tooltip
                                     id="confirmations-tooltip"
                                     place="top"
-                                    style={{ maxWidth: "250px", whiteSpace: "normal", wordWrap: "break-word" }}
+                                    style={{ zIndex: 1000, maxWidth: "250px", whiteSpace: "normal", wordWrap: "break-word" }}
                                     content="Confirmations indicate how many blocks have been added after the transaction was accepted. A higher number of confirmations increases the security of the transaction. Once the confirmation count reaches 86,400, the transaction is considered finalized and cannot be reversed. Confirmations are not required for HTN wallets, exchanges require confirmations for crediting deposits."
                                   />
                                 </div>
@@ -162,7 +162,7 @@ const TransactionInfo = () => {
                                   <Tooltip
                                     id="confirmations-tooltip"
                                     place="top"
-                                    style={{ maxWidth: "250px", whiteSpace: "normal", wordWrap: "break-word" }}
+                                    style={{ zIndex: 1000, maxWidth: "250px", whiteSpace: "normal", wordWrap: "break-word" }}
                                     content="Confirmations indicate how many blocks have been added after the transaction was accepted. A higher number of confirmations increases the security of the transaction. Once the confirmation count reaches 86,400, the transaction is considered finalized and cannot be reversed. Confirmations are not required for HTN wallets, exchanges require confirmations for crediting deposits."
                                   />
                                 </div>
@@ -178,7 +178,7 @@ const TransactionInfo = () => {
                               <Tooltip
                                 id="accepted-tooltip-mobile"
                                 place="top"
-                                style={{ maxWidth: "250px", whiteSpace: "normal", wordWrap: "break-word" }}
+                                style={{ zIndex: 1000, maxWidth: "250px", whiteSpace: "normal", wordWrap: "break-word" }}
                                 content="A transaction may appear as unaccepted for several reasons. First the transaction may be so new that it has not been accepted yet. Second, the explorer's database filler might have missed it while processing the virtual chain. Additionally, when parallel blocks with identical blue scores are created, only one reward transaction is accepted. In rare cases, a double-spend transaction may also be rejected."
                               />
                             </div>
@@ -188,7 +188,7 @@ const TransactionInfo = () => {
                               <Tooltip
                                 id="accepted-tooltip-mobile"
                                 place="top"
-                                style={{ maxWidth: "250px", whiteSpace: "normal", wordWrap: "break-word" }}
+                                style={{ zIndex: 1000, maxWidth: "250px", whiteSpace: "normal", wordWrap: "break-word" }}
                                 content="A transaction may appear as unaccepted for several reasons. First the transaction may be so new that it has not been accepted yet. Second, the explorer's database filler might have missed it while processing the virtual chain. Additionally, when parallel blocks with identical blue scores are created, only one reward transaction is accepted. In rare cases, a double-spend transaction may also be rejected."
                               />
                             </div>
@@ -203,7 +203,7 @@ const TransactionInfo = () => {
                                 <Tooltip
                                   id="confirmations-tooltip-mobile"
                                   place="top"
-                                  style={{ maxWidth: "250px", whiteSpace: "normal", wordWrap: "break-word" }}
+                                  style={{ zIndex: 1000, maxWidth: "250px", whiteSpace: "normal", wordWrap: "break-word" }}
                                   content="Confirmations indicate how many blocks have been added after the transaction was accepted. A higher number of confirmations increases the security of the transaction. Once the confirmation count reaches 86,400, the transaction is considered finalized and cannot be reversed. Confirmations are not required for HTN wallets, exchanges require confirmations for crediting deposits."
                                 />
                               </div>
@@ -216,7 +216,7 @@ const TransactionInfo = () => {
                                 <Tooltip
                                   id="confirmations-tooltip-mobile"
                                   place="top"
-                                  style={{ maxWidth: "250px", whiteSpace: "normal", wordWrap: "break-word" }}
+                                  style={{ zIndex: 1000, maxWidth: "250px", whiteSpace: "normal", wordWrap: "break-word" }}
                                   content="Confirmations indicate how many blocks have been added after the transaction was accepted. A higher number of confirmations increases the security of the transaction. Once the confirmation count reaches 86,400, the transaction is considered finalized and cannot be reversed. Confirmations are not required for HTN wallets, exchanges require confirmations for crediting deposits."
                                 />
                               </div>
