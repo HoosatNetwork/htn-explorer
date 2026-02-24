@@ -78,15 +78,9 @@ const BlockDAGBox = () => {
   }, []);
 
   useEffect(() => {
-    updateServerVersion = async () => {
-      // Fetch server version from htnd endpoint
-      try {
-        const htndInfo = await fetch(`${process.env.REACT_APP_API}/info/htnd`);
-        const htndData = await htndInfo.json();
-        setServerVersion(htndData.serverVersion);
-      } catch (err) {
-        // Error handling
-      }
+    const updateServerVersion = async () => {
+      const info = await getInfo();
+      setServerVersion(info.serverVersion);
     };
     updateServerVersion();
   }, []);
