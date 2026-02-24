@@ -37,14 +37,6 @@ const BlockDAGBox = () => {
       const info = await getInfo();
       setMempoolSize(info.mempoolSize);
 
-      // Fetch server version from htnd endpoint
-      try {
-        const htndInfo = await fetch(`${process.env.REACT_APP_API}/info/htnd`);
-        const htndData = await htndInfo.json();
-        setServerVersion(htndData.serverVersion);
-      } catch (err) {
-        // Error handling
-      }
       const unixTimestamp = Math.floor(Date.now() / 1000);
       const timeToFork = Math.trunc((nextHFDAAScore - dag_info.virtualDaaScore) / 5);
       // 2528964 = (123956218 - 111311398) / 5
@@ -85,6 +77,20 @@ const BlockDAGBox = () => {
     };
   }, []);
 
+  useEffect(() => {
+    updateServerVersion = async () => {
+      // Fetch server version from htnd endpoint
+      try {
+        const htndInfo = await fetch(`${process.env.REACT_APP_API}/info/htnd`);
+        const htndData = await htndInfo.json();
+        setServerVersion(htndData.serverVersion);
+      } catch (err) {
+        // Error handling
+      }
+    };
+    updateServerVersion();
+  }, []);
+
   useEffect(
     (e) => {
       const element = document.getElementById("blockCount");
@@ -99,11 +105,11 @@ const BlockDAGBox = () => {
           {
             // timing options
             duration: 300,
-          }
+          },
         );
       }
     },
-    [blockCount]
+    [blockCount],
   );
 
   useEffect(
@@ -120,11 +126,11 @@ const BlockDAGBox = () => {
           {
             // timing options
             duration: 300,
-          }
+          },
         );
       }
     },
-    [headerCount]
+    [headerCount],
   );
 
   useEffect(
@@ -142,12 +148,12 @@ const BlockDAGBox = () => {
             {
               // timing options
               duration: 300,
-            }
+            },
           );
         }
       }
     },
-    [virtualDaaScore, showHF]
+    [virtualDaaScore, showHF],
   );
 
   useEffect(
@@ -164,11 +170,11 @@ const BlockDAGBox = () => {
           {
             // timing options
             duration: 300,
-          }
+          },
         );
       }
     },
-    [hashrate]
+    [hashrate],
   );
 
   useEffect(
@@ -186,12 +192,12 @@ const BlockDAGBox = () => {
             {
               // timing options
               duration: 300,
-            }
+            },
           );
         }
       }
     },
-    [nextHardForkTime, showHF]
+    [nextHardForkTime, showHF],
   );
 
   const formatHashrate = (hashrate) => {
