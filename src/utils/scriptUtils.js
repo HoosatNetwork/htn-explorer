@@ -304,212 +304,331 @@ const redeemLooksLikeScript = (redeemScriptHex) => {
  * - unknown: no confident match
  */
 export const detectScriptPattern = (scriptHex) => {
-  const hex = normalizeHex(scriptHex);
-  if (!hex) {
-    return { type: "Unknown", details: {}, matchType: "unknown", confidence: 0 };
-  }
+  const _detect = (rawHex, depth = 0) => {
+    const hex = normalizeHex(rawHex);
+    if (!hex) {
+      return { type: "Unknown", details: {}, matchType: "unknown", confidence: 0 };
+    }
 
-  const { opcodes } = disassembleScript(hex);
-  const names = opcodes.map((o) => o.name);
+    const { opcodes } = disassembleScript(hex);
+    const names = opcodes.map((o) => o.name);
 
-  // OP_RETURN / data carrier
-  if (names[0] === "OP_RETURN") {
-    const pushed = opcodes.filter((o) => !!o.dataHex);
-    if (pushed.length > 0) {
+    const sliceHexFromOpIndex = (startOpIndex) => {
+      if (!opcodes[startOpIndex]) return "";
+      const startByte = opcodes[startOpIndex].offset;
+      return hex.slice(startByte * 2);
+    };
+
+    // Trivial scripts
+    if (names.length === 1 && names[0] === "OP_1") {
+      return { type: "Anyone Can Spend", details: {}, matchType: "exact", confidence: 1 };
+    }
+    if (names.length === 1 && names[0] === "OP_0") {
+      return { type: "Provably Unspendable", details: {}, matchType: "exact", confidence: 1 };
+    }
+
+    // Witness program (Bitcoin-style). Not typical for Hoosat, but classify when present.
+    // Pattern: OP_0|OP_1..OP_16 <2..40-byte program>
+    if (
+      names.length === 2 &&
+      (names[0] === "OP_0" || isOpN(names[0])) &&
+      opcodes[1]?.pushSize &&
+      opcodes[1].pushSize >= 2 &&
+      opcodes[1].pushSize <= 40 &&
+      !!opcodes[1]?.dataHex
+    ) {
+      const witnessVersion = names[0] === "OP_0" ? 0 : opNToInt(names[0]);
+      const programBytes = opcodes[1].pushSize;
+      const program = opcodes[1].dataHex;
+
+      if (witnessVersion === 0 && programBytes === 20) {
+        return {
+          type: "P2WPKH",
+          details: { witnessVersion, programBytes, program },
+          matchType: "exact",
+          confidence: 1,
+        };
+      }
+      if (witnessVersion === 0 && programBytes === 32) {
+        return {
+          type: "P2WSH",
+          details: { witnessVersion, programBytes, program },
+          matchType: "exact",
+          confidence: 1,
+        };
+      }
+      if (witnessVersion === 1 && programBytes === 32) {
+        return {
+          type: "P2TR",
+          details: { witnessVersion, programBytes, program },
+          matchType: "exact",
+          confidence: 1,
+        };
+      }
+
       return {
-        type: "Data Carrier",
-        details: { bytes: pushed.reduce((n, o) => n + (o.pushSize || 0), 0) },
+        type: "Witness Program",
+        details: { witnessVersion, programBytes, program },
+        matchType: "exact",
+        confidence: 0.95,
+      };
+    }
+
+    // Wrapped templates (timelock/hashlock) - keep recursion shallow to avoid edge-cases.
+    if (depth < 2 && opcodes.length >= 4 && isPushOpcode(opcodes[0].opcode) && !!opcodes[0].dataHex) {
+      // <lock> OP_CHECKLOCKTIMEVERIFY OP_DROP <...script>
+      if (names[1] === "OP_CHECKLOCKTIMEVERIFY" && names[2] === "OP_DROP") {
+        const inner = _detect(sliceHexFromOpIndex(3), depth + 1);
+        if (inner.type !== "Unknown") {
+          return {
+            type: `${inner.type} (CLTV)`,
+            details: { ...inner.details, lockValueHex: opcodes[0].dataHex, lockValueBytes: opcodes[0].pushSize },
+            matchType: "heuristic",
+            confidence: Math.min(inner.confidence || 0.8, 0.85),
+          };
+        }
+      }
+
+      // <sequence> OP_CHECKSEQUENCEVERIFY OP_DROP <...script>
+      if (names[1] === "OP_CHECKSEQUENCEVERIFY" && names[2] === "OP_DROP") {
+        const inner = _detect(sliceHexFromOpIndex(3), depth + 1);
+        if (inner.type !== "Unknown") {
+          return {
+            type: `${inner.type} (CSV)`,
+            details: {
+              ...inner.details,
+              sequenceValueHex: opcodes[0].dataHex,
+              sequenceValueBytes: opcodes[0].pushSize,
+            },
+            matchType: "heuristic",
+            confidence: Math.min(inner.confidence || 0.8, 0.85),
+          };
+        }
+      }
+    }
+
+    // Hashlock wrapper: OP_SHA256 <32-byte hash> OP_EQUALVERIFY <...script>
+    if (
+      depth < 2 &&
+      opcodes.length >= 4 &&
+      names[0] === "OP_SHA256" &&
+      opcodes[1]?.pushSize === 32 &&
+      !!opcodes[1]?.dataHex
+    ) {
+      if (names[2] === "OP_EQUALVERIFY") {
+        const inner = _detect(sliceHexFromOpIndex(3), depth + 1);
+        if (inner.type !== "Unknown") {
+          return {
+            type: `${inner.type} (Hashlock)`,
+            details: { ...inner.details, hashAlgo: "sha256", hash: opcodes[1].dataHex },
+            matchType: "heuristic",
+            confidence: Math.min(inner.confidence || 0.8, 0.82),
+          };
+        }
+      }
+    }
+
+    // OP_RETURN / data carrier
+    if (names[0] === "OP_RETURN") {
+      const pushed = opcodes.filter((o) => !!o.dataHex);
+      if (pushed.length > 0) {
+        return {
+          type: "Data Carrier",
+          details: { bytes: pushed.reduce((n, o) => n + (o.pushSize || 0), 0) },
+          matchType: "exact",
+          confidence: 1,
+        };
+      }
+      return { type: "OP_RETURN", details: {}, matchType: "exact", confidence: 1 };
+    }
+
+    // Hoosat pubkeyhash (address): OP_DUP OP_BLAKE2B PUSH(32) <32-byte> OP_EQUALVERIFY OP_CHECKSIG
+    // (Also support OP_CHECKSIGECDSA variant)
+    if (
+      names.length === 5 &&
+      names[0] === "OP_DUP" &&
+      names[1] === "OP_BLAKE2B" &&
+      opcodes[2]?.pushSize === 32 &&
+      !!opcodes[2]?.dataHex &&
+      names[3] === "OP_EQUALVERIFY" &&
+      (names[4] === "OP_CHECKSIG" || names[4] === "OP_CHECKSIGECDSA")
+    ) {
+      return {
+        type: "P2PKH",
+        details: {
+          pubKeyHash: opcodes[2].dataHex,
+          hashAlgo: "blake2b-256",
+          format: names[4] === "OP_CHECKSIGECDSA" ? "blake2b-32 (ecdsa)" : "blake2b-32",
+        },
         matchType: "exact",
         confidence: 1,
       };
     }
-    return { type: "OP_RETURN", details: {}, matchType: "exact", confidence: 1 };
-  }
 
-  // Hoosat pubkeyhash (address): OP_DUP OP_BLAKE2B PUSH(32) <32-byte> OP_EQUALVERIFY OP_CHECKSIG
-  // (Also support OP_CHECKSIGECDSA variant)
-  if (
-    names.length === 5 &&
-    names[0] === "OP_DUP" &&
-    names[1] === "OP_BLAKE2B" &&
-    opcodes[2]?.pushSize === 32 &&
-    !!opcodes[2]?.dataHex &&
-    names[3] === "OP_EQUALVERIFY" &&
-    (names[4] === "OP_CHECKSIG" || names[4] === "OP_CHECKSIGECDSA")
-  ) {
-    return {
-      type: "P2PKH",
-      details: {
-        pubKeyHash: opcodes[2].dataHex,
-        hashAlgo: "blake2b-256",
-        format: names[4] === "OP_CHECKSIGECDSA" ? "blake2b-32 (ecdsa)" : "blake2b-32",
-      },
-      matchType: "exact",
-      confidence: 1,
-    };
-  }
+    // Legacy Bitcoin-like P2PKH: OP_DUP OP_HASH160 PUSH(20) <20-byte> OP_EQUALVERIFY OP_CHECKSIG
+    if (
+      names.length === 5 &&
+      names[0] === "OP_DUP" &&
+      names[1] === "OP_HASH160" &&
+      opcodes[2]?.pushSize === 20 &&
+      !!opcodes[2]?.dataHex &&
+      names[3] === "OP_EQUALVERIFY" &&
+      names[4] === "OP_CHECKSIG"
+    ) {
+      return {
+        type: "P2PKH",
+        details: { pubKeyHash: opcodes[2].dataHex },
+        matchType: "exact",
+        confidence: 1,
+      };
+    }
 
-  // Legacy Bitcoin-like P2PKH: OP_DUP OP_HASH160 PUSH(20) <20-byte> OP_EQUALVERIFY OP_CHECKSIG
-  if (
-    names.length === 5 &&
-    names[0] === "OP_DUP" &&
-    names[1] === "OP_HASH160" &&
-    opcodes[2]?.pushSize === 20 &&
-    !!opcodes[2]?.dataHex &&
-    names[3] === "OP_EQUALVERIFY" &&
-    names[4] === "OP_CHECKSIG"
-  ) {
-    return {
-      type: "P2PKH",
-      details: { pubKeyHash: opcodes[2].dataHex },
-      matchType: "exact",
-      confidence: 1,
-    };
-  }
+    // Hoosat P2SH (HTND): OP_BLAKE2B PUSH(32) <32-byte scriptHash> OP_EQUAL
+    if (
+      names.length === 3 &&
+      names[0] === "OP_BLAKE2B" &&
+      opcodes[1]?.pushSize === 32 &&
+      !!opcodes[1]?.dataHex &&
+      names[2] === "OP_EQUAL"
+    ) {
+      return {
+        type: "P2SH",
+        details: {
+          scriptHash: opcodes[1].dataHex,
+          hashAlgo: "blake2b-256",
+          format: "blake2b-32",
+          scriptHashBytes: 32,
+        },
+        matchType: "exact",
+        confidence: 1,
+      };
+    }
 
-  // Hoosat P2SH (HTND): OP_BLAKE2B PUSH(32) <32-byte scriptHash> OP_EQUAL
-  if (
-    names.length === 3 &&
-    names[0] === "OP_BLAKE2B" &&
-    opcodes[1]?.pushSize === 32 &&
-    !!opcodes[1]?.dataHex &&
-    names[2] === "OP_EQUAL"
-  ) {
-    return {
-      type: "P2SH",
-      details: {
-        scriptHash: opcodes[1].dataHex,
-        hashAlgo: "blake2b-256",
-        format: "blake2b-32",
-        scriptHashBytes: 32,
-      },
-      matchType: "exact",
-      confidence: 1,
-    };
-  }
+    // Legacy P2SH (Bitcoin-like): OP_HASH160 PUSH(20) <20-byte> OP_EQUAL
+    if (
+      names.length === 3 &&
+      names[0] === "OP_HASH160" &&
+      opcodes[1]?.pushSize === 20 &&
+      !!opcodes[1]?.dataHex &&
+      names[2] === "OP_EQUAL"
+    ) {
+      return {
+        type: "P2SH",
+        details: {
+          scriptHash: opcodes[1].dataHex,
+          hashAlgo: "hash160",
+          format: "hash160-20",
+          scriptHashBytes: 20,
+        },
+        matchType: "exact",
+        confidence: 1,
+      };
+    }
 
-  // Legacy P2SH (Bitcoin-like): OP_HASH160 PUSH(20) <20-byte> OP_EQUAL
-  if (
-    names.length === 3 &&
-    names[0] === "OP_HASH160" &&
-    opcodes[1]?.pushSize === 20 &&
-    !!opcodes[1]?.dataHex &&
-    names[2] === "OP_EQUAL"
-  ) {
-    return {
-      type: "P2SH",
-      details: {
-        scriptHash: opcodes[1].dataHex,
-        hashAlgo: "hash160",
-        format: "hash160-20",
-        scriptHashBytes: 20,
-      },
-      matchType: "exact",
-      confidence: 1,
-    };
-  }
+    // P2PK: PUSH(32|33|65) <pubkey> OP_CHECKSIG / OP_CHECKSIGECDSA
+    if (
+      names.length === 2 &&
+      opcodes[0]?.pushSize &&
+      isLikelyPubKeySize(opcodes[0].pushSize) &&
+      !!opcodes[0]?.dataHex &&
+      (names[1] === "OP_CHECKSIG" || names[1] === "OP_CHECKSIGECDSA")
+    ) {
+      return {
+        type: "P2PK",
+        details: { pubKey: opcodes[0].dataHex },
+        matchType: "exact",
+        confidence: 1,
+      };
+    }
 
-  // P2PK: PUSH(32|33|65) <pubkey> OP_CHECKSIG / OP_CHECKSIGECDSA
-  if (
-    names.length === 2 &&
-    opcodes[0]?.pushSize &&
-    isLikelyPubKeySize(opcodes[0].pushSize) &&
-    !!opcodes[0]?.dataHex &&
-    (names[1] === "OP_CHECKSIG" || names[1] === "OP_CHECKSIGECDSA")
-  ) {
-    return {
-      type: "P2PK",
-      details: { pubKey: opcodes[0].dataHex },
-      matchType: "exact",
-      confidence: 1,
-    };
-  }
+    // Bare multisig: OP_m <pubkeys...> OP_n OP_CHECKMULTISIG
+    if (
+      names.length >= 4 &&
+      isOpN(names[0]) &&
+      names[names.length - 1] === "OP_CHECKMULTISIG" &&
+      isOpN(names[names.length - 2])
+    ) {
+      const m = opNToInt(names[0]);
+      const n = opNToInt(names[names.length - 2]);
 
-  // Bare multisig: OP_m <pubkeys...> OP_n OP_CHECKMULTISIG
-  if (
-    names.length >= 4 &&
-    isOpN(names[0]) &&
-    names[names.length - 1] === "OP_CHECKMULTISIG" &&
-    isOpN(names[names.length - 2])
-  ) {
-    const m = opNToInt(names[0]);
-    const n = opNToInt(names[names.length - 2]);
+      const pubkeyOps = opcodes.slice(1, -2);
+      const pubkeys = pubkeyOps.filter((o) => !!o.dataHex && isLikelyPubKeySize(o.pushSize)).map((o) => o.dataHex);
 
-    const pubkeyOps = opcodes.slice(1, -2);
-    const pubkeys = pubkeyOps.filter((o) => !!o.dataHex && isLikelyPubKeySize(o.pushSize)).map((o) => o.dataHex);
+      if (m !== null && n !== null && pubkeys.length === pubkeyOps.length && pubkeys.length === n) {
+        return {
+          type: "P2MS",
+          details: { m, n, format: `${m}-of-${n}`, pubkeys },
+          matchType: "exact",
+          confidence: 1,
+        };
+      }
 
-    if (m !== null && n !== null && pubkeys.length === pubkeyOps.length && pubkeys.length === n) {
+      // Looks multisig-ish but not strict.
       return {
         type: "P2MS",
-        details: { m, n, format: `${m}-of-${n}`, pubkeys },
-        matchType: "exact",
-        confidence: 1,
+        details: { m, n, format: m && n ? `${m}-of-${n}` : undefined },
+        matchType: "heuristic",
+        confidence: 0.7,
       };
     }
 
-    // Looks multisig-ish but not strict.
-    return {
-      type: "P2MS",
-      details: { m, n, format: m && n ? `${m}-of-${n}` : undefined },
-      matchType: "heuristic",
-      confidence: 0.7,
-    };
-  }
+    // Signature script heuristics (useful for Inputs tab)
+    // Typical P2PK sigScript: <sig>
+    // (We keep this heuristic narrow; many scripts are just pushes.)
+    if (opcodes.length === 1 && opcodes[0]?.dataHex && opcodes[0]?.pushSize >= 60 && opcodes[0]?.pushSize <= 80) {
+      return {
+        type: "P2PK Unlock",
+        details: { signatureBytes: opcodes[0].pushSize },
+        matchType: "heuristic",
+        confidence: 0.6,
+      };
+    }
 
-  // Signature script heuristics (useful for Inputs tab)
-  // Typical P2PK sigScript: <sig>
-  // (We keep this heuristic narrow; many scripts are just pushes.)
-  if (opcodes.length === 1 && opcodes[0]?.dataHex && opcodes[0]?.pushSize >= 60 && opcodes[0]?.pushSize <= 80) {
-    return {
-      type: "P2PK Unlock",
-      details: { signatureBytes: opcodes[0].pushSize },
-      matchType: "heuristic",
-      confidence: 0.6,
-    };
-  }
+    // Typical P2PKH sigScript: <sig> <pubkey>
+    if (opcodes.length === 2 && opcodes[0]?.dataHex && opcodes[1]?.dataHex && isLikelyPubKeySize(opcodes[1].pushSize)) {
+      return { type: "P2PKH Unlock", details: {}, matchType: "heuristic", confidence: 0.7 };
+    }
 
-  // Typical P2PKH sigScript: <sig> <pubkey>
-  if (opcodes.length === 2 && opcodes[0]?.dataHex && opcodes[1]?.dataHex && isLikelyPubKeySize(opcodes[1].pushSize)) {
-    return { type: "P2PKH Unlock", details: {}, matchType: "heuristic", confidence: 0.7 };
-  }
+    // Typical multisig (P2MS) unlock in a P2SH sigScript: OP_0 <sig>... <redeemScript>
+    // If the redeemScript decodes as a bare multisig script, label it explicitly.
+    if (names[0] === "OP_0" && opcodes.length >= 3) {
+      const redeem = extractRedeemScript(hex);
+      if (redeem && redeemLooksLikeScript(redeem)) {
+        const redeemPat = _detect(redeem, depth + 1);
+        if (redeemPat?.type === "P2MS") {
+          return {
+            type: "P2MS Unlock",
+            details: { ...redeemPat.details, redeemScriptBytes: redeem.length / 2 },
+            matchType: "heuristic",
+            confidence: 0.8,
+          };
+        }
+      }
+    }
 
-  // Typical multisig (P2MS) unlock in a P2SH sigScript: OP_0 <sig>... <redeemScript>
-  // If the redeemScript decodes as a bare multisig script, label it explicitly.
-  if (names[0] === "OP_0" && opcodes.length >= 3) {
-    const redeem = extractRedeemScript(hex);
-    if (redeem && redeemLooksLikeScript(redeem)) {
-      const redeemPat = detectScriptPattern(redeem);
-      if (redeemPat?.type === "P2MS") {
+    // Likely P2SH sigScript: multiple pushes and last push is a *script* (not just a pubkey/hash).
+    // Important: keep this heuristic strict, otherwise it will mislabel most scripts.
+    if (opcodes.length >= 2) {
+      const redeem = extractRedeemScript(hex);
+      if (redeem && redeem.length >= 2 && redeemLooksLikeScript(redeem)) {
         return {
-          type: "P2MS Unlock",
-          details: { ...redeemPat.details, redeemScriptBytes: redeem.length / 2 },
+          type: "P2SH Unlock",
+          details: { redeemScriptBytes: redeem.length / 2 },
           matchType: "heuristic",
-          confidence: 0.8,
+          confidence: 0.75,
         };
       }
     }
-  }
 
-  // Likely P2SH sigScript: multiple pushes and last push is a *script* (not just a pubkey/hash).
-  // Important: keep this heuristic strict, otherwise it will mislabel most scripts.
-  if (opcodes.length >= 2) {
-    const redeem = extractRedeemScript(hex);
-    if (redeem && redeem.length >= 2 && redeemLooksLikeScript(redeem)) {
-      return {
-        type: "P2SH Unlock",
-        details: { redeemScriptBytes: redeem.length / 2 },
-        matchType: "heuristic",
-        confidence: 0.75,
-      };
+    // Custom contract heuristic: control flow present
+    if (names.some((n) => n === "OP_IF" || n === "OP_NOTIF" || n === "OP_ELSE" || n === "OP_ENDIF")) {
+      return { type: "Custom Contract", details: {}, matchType: "heuristic", confidence: 0.6 };
     }
-  }
 
-  // Custom contract heuristic: control flow present
-  if (names.some((n) => n === "OP_IF" || n === "OP_NOTIF" || n === "OP_ELSE" || n === "OP_ENDIF")) {
-    return { type: "Custom Contract", details: {}, matchType: "heuristic", confidence: 0.6 };
-  }
+    return { type: "Unknown", details: {}, matchType: "unknown", confidence: 0.1 };
+  };
 
-  return { type: "Unknown", details: {}, matchType: "unknown", confidence: 0.1 };
+  return _detect(scriptHex, 0);
 };
 
 export const _internal = {

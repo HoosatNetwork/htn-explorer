@@ -30,6 +30,13 @@ const PatternBadge = ({ pattern, role }) => {
   const detailParts = [];
   if (pattern.details?.pubKeyHash) detailParts.push(`pubKeyHash=${truncateHex(pattern.details.pubKeyHash)}`);
   if (pattern.details?.scriptHash) detailParts.push(`scriptHash=${truncateHex(pattern.details.scriptHash)}`);
+  if (pattern.details?.program) {
+    const v = typeof pattern.details?.witnessVersion === "number" ? `v${pattern.details.witnessVersion} ` : "";
+    detailParts.push(`witness=${v}${truncateHex(pattern.details.program)}`);
+  }
+  if (pattern.details?.lockValueHex) detailParts.push(`cltv=${truncateHex(pattern.details.lockValueHex)}`);
+  if (pattern.details?.sequenceValueHex) detailParts.push(`csv=${truncateHex(pattern.details.sequenceValueHex)}`);
+  if (pattern.details?.hash) detailParts.push(`hash=${truncateHex(pattern.details.hash)}`);
   if (pattern.details?.pubKey)
     detailParts.push(`pubkey(${(pattern.details.pubKey.length || 0) / 2}b)=${truncateHex(pattern.details.pubKey)}`);
   if (pattern.details?.bytes) detailParts.push(`${pattern.details.bytes} bytes`);
@@ -158,7 +165,12 @@ const classifyPush = (pushOp, pushIndex, totalPushes, context = {}) => {
   }
 
   if (patternType === "P2PKH") {
-    if (size === 20 && pushIndex === 0) return "pubKeyHash";
+    // Hoosat P2PKH uses 32-byte blake2b hashes; legacy P2PKH uses 20-byte hash160.
+    if ((size === 20 || size === 32) && pushIndex === 0) return "pubKeyHash";
+  }
+
+  if (patternType === "P2WPKH" || patternType === "P2WSH" || patternType === "P2TR" || patternType === "Witness Program") {
+    if (pushIndex === 0 && size >= 2 && size <= 40) return "witnessProgram";
   }
 
   if (size === 20) return "hash160";
