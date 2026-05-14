@@ -11,6 +11,7 @@ import { Tooltip } from "react-tooltip";
 import InputItem from "./InputItem.js";
 import OutputItem from "./OutputItem.js";
 import EmptyTablePlaceholder from "./EmptyTablePlaceholder.js";
+import ScriptAnalysisPanel from "./ScriptAnalysisPanel.js";
 
 const getOutputFromIndex = (outputs, index) => {
   return outputs[index];
@@ -22,7 +23,7 @@ const TransactionInfo = () => {
   const [additionalTxInfo, setAdditionalTxInfo] = useState();
   const [showTxFee, setShowTxFee] = useState(false);
   const [, setError] = useState(false);
-  const [view, setView] = useState('outputs');
+  const [view, setView] = useState("outputs");
   const [showAdditionalDetails, setShowAdditionalDetails] = useState(false);
 
   const retryCnt = useRef(0);
@@ -44,7 +45,7 @@ const TransactionInfo = () => {
           setTxInfo(undefined);
           throw err;
         }),
-    [id]
+    [id],
   );
   useEffect(() => {
     setError(false);
@@ -85,10 +86,12 @@ const TransactionInfo = () => {
 
   return (
     <div className="blockinfo-page">
-      <Container className="webpage" fluid >
+      <Container className="webpage" fluid>
         <Row>
           <Col xs={12}>
-            <h2 className="text-white mb-4" style={{ fontSize: '2rem', fontWeight: '700' }}>Transaction Details</h2>
+            <h2 className="text-white mb-4" style={{ fontSize: "2rem", fontWeight: "700" }}>
+              Transaction Details
+            </h2>
           </Col>
         </Row>
 
@@ -103,15 +106,21 @@ const TransactionInfo = () => {
                       {/* Transaction ID and Subnetwork ID */}
                       <div className="mb-4">
                         <div className="d-flex align-items-start justify-content-between flex-wrap gap-3 mb-2">
-                          <div className="flex-grow-1" style={{ minWidth: '0' }}>
+                          <div className="flex-grow-1" style={{ minWidth: "0" }}>
                             {/* Tx ID */}
-                            <div className="d-flex align-items-center gap-2 mb-2" style={{ fontSize: '0.95rem', wordBreak: 'break-all', fontFamily: 'monospace' }}>
+                            <div
+                              className="d-flex align-items-center gap-2 mb-2"
+                              style={{ fontSize: "0.95rem", wordBreak: "break-all", fontFamily: "monospace" }}
+                            >
                               <span className="text-slate-200">Tx ID: {txInfo.transaction_id}</span>
                               <CopyButton text={txInfo.transaction_id} />
                             </div>
 
                             {/* Subnetwork ID */}
-                            <div className="d-flex align-items-center gap-2" style={{ fontSize: '0.95rem', wordBreak: 'break-all', fontFamily: 'monospace' }}>
+                            <div
+                              className="d-flex align-items-center gap-2"
+                              style={{ fontSize: "0.95rem", wordBreak: "break-all", fontFamily: "monospace" }}
+                            >
                               <span className="text-slate-200">Subnetwork ID: {txInfo.subnetwork_id}</span>
                             </div>
                           </div>
@@ -124,7 +133,12 @@ const TransactionInfo = () => {
                                 <Tooltip
                                   id="accepted-tooltip"
                                   place="top"
-                                  style={{ zIndex: 1000, maxWidth: "250px", whiteSpace: "normal", wordWrap: "break-word" }}
+                                  style={{
+                                    zIndex: 1000,
+                                    maxWidth: "250px",
+                                    whiteSpace: "normal",
+                                    wordWrap: "break-word",
+                                  }}
                                   content="A transaction may appear as unaccepted for several reasons. First the transaction may be so new that it has not been accepted yet. Second, the explorer's database filler might have missed it while processing the virtual chain. Additionally, when parallel blocks with identical blue scores are created, only one reward transaction is accepted. In rare cases, a double-spend transaction may also be rejected."
                                 />
                               </div>
@@ -134,7 +148,12 @@ const TransactionInfo = () => {
                                 <Tooltip
                                   id="accepted-tooltip"
                                   place="top"
-                                  style={{ zIndex: 1000, maxWidth: "250px", whiteSpace: "normal", wordWrap: "break-word" }}
+                                  style={{
+                                    zIndex: 1000,
+                                    maxWidth: "250px",
+                                    whiteSpace: "normal",
+                                    wordWrap: "break-word",
+                                  }}
                                   content="A transaction may appear as unaccepted for several reasons. First the transaction may be so new that it has not been accepted yet. Second, the explorer's database filler might have missed it while processing the virtual chain. Additionally, when parallel blocks with identical blue scores are created, only one reward transaction is accepted. In rare cases, a double-spend transaction may also be rejected."
                                 />
                               </div>
@@ -149,7 +168,12 @@ const TransactionInfo = () => {
                                   <Tooltip
                                     id="confirmations-tooltip"
                                     place="top"
-                                    style={{ zIndex: 1000, maxWidth: "250px", whiteSpace: "normal", wordWrap: "break-word" }}
+                                    style={{
+                                      zIndex: 1000,
+                                      maxWidth: "250px",
+                                      whiteSpace: "normal",
+                                      wordWrap: "break-word",
+                                    }}
                                     content="Confirmations indicate how many blocks have been added after the transaction was accepted. A higher number of confirmations increases the security of the transaction. Once the confirmation count reaches 86,400, the transaction is considered finalized and cannot be reversed. Confirmations are not required for HTN wallets, exchanges require confirmations for crediting deposits."
                                   />
                                 </div>
@@ -162,7 +186,12 @@ const TransactionInfo = () => {
                                   <Tooltip
                                     id="confirmations-tooltip"
                                     place="top"
-                                    style={{ zIndex: 1000, maxWidth: "250px", whiteSpace: "normal", wordWrap: "break-word" }}
+                                    style={{
+                                      zIndex: 1000,
+                                      maxWidth: "250px",
+                                      whiteSpace: "normal",
+                                      wordWrap: "break-word",
+                                    }}
                                     content="Confirmations indicate how many blocks have been added after the transaction was accepted. A higher number of confirmations increases the security of the transaction. Once the confirmation count reaches 86,400, the transaction is considered finalized and cannot be reversed. Confirmations are not required for HTN wallets, exchanges require confirmations for crediting deposits."
                                   />
                                 </div>
@@ -178,7 +207,12 @@ const TransactionInfo = () => {
                               <Tooltip
                                 id="accepted-tooltip-mobile"
                                 place="top"
-                                style={{ zIndex: 1000, maxWidth: "250px", whiteSpace: "normal", wordWrap: "break-word" }}
+                                style={{
+                                  zIndex: 1000,
+                                  maxWidth: "250px",
+                                  whiteSpace: "normal",
+                                  wordWrap: "break-word",
+                                }}
                                 content="A transaction may appear as unaccepted for several reasons. First the transaction may be so new that it has not been accepted yet. Second, the explorer's database filler might have missed it while processing the virtual chain. Additionally, when parallel blocks with identical blue scores are created, only one reward transaction is accepted. In rare cases, a double-spend transaction may also be rejected."
                               />
                             </div>
@@ -188,7 +222,12 @@ const TransactionInfo = () => {
                               <Tooltip
                                 id="accepted-tooltip-mobile"
                                 place="top"
-                                style={{ zIndex: 1000, maxWidth: "250px", whiteSpace: "normal", wordWrap: "break-word" }}
+                                style={{
+                                  zIndex: 1000,
+                                  maxWidth: "250px",
+                                  whiteSpace: "normal",
+                                  wordWrap: "break-word",
+                                }}
                                 content="A transaction may appear as unaccepted for several reasons. First the transaction may be so new that it has not been accepted yet. Second, the explorer's database filler might have missed it while processing the virtual chain. Additionally, when parallel blocks with identical blue scores are created, only one reward transaction is accepted. In rare cases, a double-spend transaction may also be rejected."
                               />
                             </div>
@@ -203,7 +242,12 @@ const TransactionInfo = () => {
                                 <Tooltip
                                   id="confirmations-tooltip-mobile"
                                   place="top"
-                                  style={{ zIndex: 1000, maxWidth: "250px", whiteSpace: "normal", wordWrap: "break-word" }}
+                                  style={{
+                                    zIndex: 1000,
+                                    maxWidth: "250px",
+                                    whiteSpace: "normal",
+                                    wordWrap: "break-word",
+                                  }}
                                   content="Confirmations indicate how many blocks have been added after the transaction was accepted. A higher number of confirmations increases the security of the transaction. Once the confirmation count reaches 86,400, the transaction is considered finalized and cannot be reversed. Confirmations are not required for HTN wallets, exchanges require confirmations for crediting deposits."
                                 />
                               </div>
@@ -216,7 +260,12 @@ const TransactionInfo = () => {
                                 <Tooltip
                                   id="confirmations-tooltip-mobile"
                                   place="top"
-                                  style={{ zIndex: 1000, maxWidth: "250px", whiteSpace: "normal", wordWrap: "break-word" }}
+                                  style={{
+                                    zIndex: 1000,
+                                    maxWidth: "250px",
+                                    whiteSpace: "normal",
+                                    wordWrap: "break-word",
+                                  }}
                                   content="Confirmations indicate how many blocks have been added after the transaction was accepted. A higher number of confirmations increases the security of the transaction. Once the confirmation count reaches 86,400, the transaction is considered finalized and cannot be reversed. Confirmations are not required for HTN wallets, exchanges require confirmations for crediting deposits."
                                 />
                               </div>
@@ -225,11 +274,13 @@ const TransactionInfo = () => {
                       </div>
 
                       {/* Stats Cards */}
-                      <Row className="g-3 mt-3 pt-3" style={{ borderTop: '1px solid #334155' }}>
+                      <Row className="g-3 mt-3 pt-3" style={{ borderTop: "1px solid #334155" }}>
                         <Col xs={12} sm={6} lg={4}>
                           <div className="bg-hoosat-slate/50 backdrop-blur-lg p-6 border border-slate-700 hover:border-hoosat-teal transition-all duration-300 hover:shadow-xl hover:shadow-hoosat-teal/20 h-100">
-                            <div className="text-slate-400 mb-2" style={{ fontSize: '0.875rem' }}>Block Time</div>
-                            <div className="text-white" style={{ fontSize: '1.15rem', fontWeight: '600' }}>
+                            <div className="text-slate-400 mb-2" style={{ fontSize: "0.875rem" }}>
+                              Block Time
+                            </div>
+                            <div className="text-white" style={{ fontSize: "1.15rem", fontWeight: "600" }}>
                               {moment(parseInt(txInfo.block_time)).format("YYYY-MM-DD HH:mm:ss")}
                             </div>
                           </div>
@@ -237,8 +288,10 @@ const TransactionInfo = () => {
 
                         <Col xs={12} sm={6} lg={4}>
                           <div className="bg-hoosat-slate/50 backdrop-blur-lg p-6 border border-slate-700 hover:border-hoosat-teal transition-all duration-300 hover:shadow-xl hover:shadow-hoosat-teal/20 h-100">
-                            <div className="text-slate-400 mb-2" style={{ fontSize: '0.875rem' }}>Mass</div>
-                            <div className="text-white" style={{ fontSize: '1.15rem', fontWeight: '600' }}>
+                            <div className="text-slate-400 mb-2" style={{ fontSize: "0.875rem" }}>
+                              Mass
+                            </div>
+                            <div className="text-white" style={{ fontSize: "1.15rem", fontWeight: "600" }}>
                               {txInfo.mass ? txInfo.mass : "-"}
                             </div>
                           </div>
@@ -247,8 +300,10 @@ const TransactionInfo = () => {
                         {showTxFee && (
                           <Col xs={12} sm={6} lg={4}>
                             <div className="bg-hoosat-slate/50 backdrop-blur-lg p-6 border border-slate-700 hover:border-hoosat-teal transition-all duration-300 hover:shadow-xl hover:shadow-hoosat-teal/20 h-100">
-                              <div className="text-slate-400 mb-2" style={{ fontSize: '0.875rem' }}>Transaction Fee</div>
-                              <div className="text-white" style={{ fontSize: '1.15rem', fontWeight: '600' }}>
+                              <div className="text-slate-400 mb-2" style={{ fontSize: "0.875rem" }}>
+                                Transaction Fee
+                              </div>
+                              <div className="text-white" style={{ fontSize: "1.15rem", fontWeight: "600" }}>
                                 {txInfo && additionalTxInfo && (
                                   <>
                                     {(txInfo.inputs
@@ -256,8 +311,8 @@ const TransactionInfo = () => {
                                         (tx_input) =>
                                           getOutputFromIndex(
                                             additionalTxInfo[tx_input.previous_outpoint_hash]?.outputs || [],
-                                            tx_input?.previous_outpoint_index
-                                          )?.amount || 0
+                                            tx_input?.previous_outpoint_index,
+                                          )?.amount || 0,
                                       )
                                       .reduce((a, b) => a + b) -
                                       (txInfo.outputs?.map((v) => v?.amount) || [0]).reduce((a, b) => a + b)) /
@@ -272,44 +327,47 @@ const TransactionInfo = () => {
                       </Row>
 
                       {/* Show Additional Details Button */}
-                      <div className="mt-4 pt-3" style={{ borderTop: '1px solid #334155' }}>
+                      <div className="mt-4 pt-3" style={{ borderTop: "1px solid #334155" }}>
                         <button
                           onClick={() => setShowAdditionalDetails(!showAdditionalDetails)}
                           className="d-flex align-items-center gap-2 bg-transparent border-0 text-slate-400 hover:text-hoosat-teal transition-colors"
-                          style={{ cursor: 'pointer', fontSize: '0.95rem', fontWeight: '500' }}
+                          style={{ cursor: "pointer", fontSize: "0.95rem", fontWeight: "500" }}
                         >
                           {showAdditionalDetails ? <BiChevronUp size={20} /> : <BiChevronDown size={20} />}
-                          <span>{showAdditionalDetails ? 'Hide Additional Details' : 'Show Additional Details'}</span>
+                          <span>{showAdditionalDetails ? "Hide Additional Details" : "Show Additional Details"}</span>
                         </button>
 
                         {/* Additional Details - Expandable */}
                         <div
                           style={{
-                            maxHeight: showAdditionalDetails ? '5000px' : '0',
-                            overflow: 'hidden',
-                            transition: 'max-height 0.4s ease-in-out, opacity 0.3s ease-in-out',
-                            opacity: showAdditionalDetails ? 1 : 0
+                            maxHeight: showAdditionalDetails ? "5000px" : "0",
+                            overflow: "hidden",
+                            transition: "max-height 0.4s ease-in-out, opacity 0.3s ease-in-out",
+                            opacity: showAdditionalDetails ? 1 : 0,
                           }}
                         >
                           <div className="mt-4">
                             {/* Hash */}
-                            <div className="row py-3" style={{ borderBottom: '1px solid #334155' }}>
+                            <div className="row py-3" style={{ borderBottom: "1px solid #334155" }}>
                               <div className="col-12 col-md-3">
-                                <div className="text-slate-400" style={{ fontSize: '0.875rem', fontWeight: '600' }}>
+                                <div className="text-slate-400" style={{ fontSize: "0.875rem", fontWeight: "600" }}>
                                   Hash
                                 </div>
                               </div>
                               <div className="col-12 col-md-9">
-                                <div className="text-slate-300 font-mono" style={{ fontSize: '0.85rem', wordBreak: 'break-all' }}>
+                                <div
+                                  className="text-slate-300 font-mono"
+                                  style={{ fontSize: "0.85rem", wordBreak: "break-all" }}
+                                >
                                   {txInfo.hash}
                                 </div>
                               </div>
                             </div>
 
                             {/* Accepting Block Hash */}
-                            <div className="row py-3" style={{ borderBottom: '1px solid #334155' }}>
+                            <div className="row py-3" style={{ borderBottom: "1px solid #334155" }}>
                               <div className="col-12 col-md-3">
-                                <div className="text-slate-400" style={{ fontSize: '0.875rem', fontWeight: '600' }}>
+                                <div className="text-slate-400" style={{ fontSize: "0.875rem", fontWeight: "600" }}>
                                   Accepting Block Hash
                                 </div>
                               </div>
@@ -317,7 +375,7 @@ const TransactionInfo = () => {
                                 <Link
                                   to={`/blocks/${txInfo.accepting_block_hash}`}
                                   className="text-hoosat-teal hover:text-teal-400 font-mono"
-                                  style={{ fontSize: '0.85rem', wordBreak: 'break-all', textDecoration: 'none' }}
+                                  style={{ fontSize: "0.85rem", wordBreak: "break-all", textDecoration: "none" }}
                                 >
                                   {txInfo.accepting_block_hash || "-"}
                                 </Link>
@@ -327,7 +385,7 @@ const TransactionInfo = () => {
                             {/* Block Hashes */}
                             <div className="row py-3">
                               <div className="col-12 col-md-3">
-                                <div className="text-slate-400" style={{ fontSize: '0.875rem', fontWeight: '600' }}>
+                                <div className="text-slate-400" style={{ fontSize: "0.875rem", fontWeight: "600" }}>
                                   Block Hashes ({txInfo.block_hash?.length || 0})
                                 </div>
                               </div>
@@ -338,7 +396,7 @@ const TransactionInfo = () => {
                                       key={idx}
                                       to={`/blocks/${hash}`}
                                       className="text-hoosat-teal hover:text-teal-400 font-mono"
-                                      style={{ fontSize: '0.85rem', wordBreak: 'break-all', textDecoration: 'none' }}
+                                      style={{ fontSize: "0.85rem", wordBreak: "break-all", textDecoration: "none" }}
                                     >
                                       {hash}
                                     </Link>
@@ -358,11 +416,16 @@ const TransactionInfo = () => {
                 <Col xs={12}>
                   <div className="bg-hoosat-slate/50 backdrop-blur-lg p-8 rounded-2xl border border-slate-700 h-full w-full">
                     <div className="d-flex flex-column align-items-center justify-content-center text-center py-4">
-                      <Spinner animation="border" variant="primary" className="mb-4" style={{ width: '3rem', height: '3rem' }} />
-                      <h3 className="text-white mb-3" style={{ fontSize: '1.5rem', fontWeight: '600' }}>
+                      <Spinner
+                        animation="border"
+                        variant="primary"
+                        className="mb-4"
+                        style={{ width: "3rem", height: "3rem" }}
+                      />
+                      <h3 className="text-white mb-3" style={{ fontSize: "1.5rem", fontWeight: "600" }}>
                         Loading Transaction {retryCnt.current}/100
                       </h3>
-                      <p className="text-slate-400 mb-0" style={{ fontSize: '1rem', maxWidth: '500px' }}>
+                      <p className="text-slate-400 mb-0" style={{ fontSize: "1rem", maxWidth: "500px" }}>
                         Sometimes transactions need a few minutes to be added into the database. Please wait...
                       </p>
                     </div>
@@ -378,58 +441,61 @@ const TransactionInfo = () => {
           <Container className="webpage" fluid>
             <Row>
               <Col className="d-flex flex-row justify-content-center">
-                <div className="d-flex gap-2 p-1 rounded" style={{ backgroundColor: 'rgba(30, 41, 59, 0.6)', border: '1px solid #334155' }}>
+                <div
+                  className="d-flex gap-2 p-1 rounded"
+                  style={{ backgroundColor: "rgba(30, 41, 59, 0.6)", border: "1px solid #334155" }}
+                >
                   <button
-                    onClick={() => handleViewSwitch('outputs')}
+                    onClick={() => handleViewSwitch("outputs")}
                     className={`px-4 py-2 rounded transition-all ${
-                      view === 'outputs'
-                        ? 'bg-hoosat-teal text-white'
-                        : 'bg-transparent text-slate-400 hover:text-hoosat-teal'
+                      view === "outputs"
+                        ? "bg-hoosat-teal text-white"
+                        : "bg-transparent text-slate-400 hover:text-hoosat-teal"
                     }`}
                     style={{
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontWeight: view === 'outputs' ? '600' : '400',
-                      backgroundColor: view === 'outputs' ? '#14B8A6' : 'transparent',
-                      color: view === 'outputs' ? 'white' : '#94a3b8',
-                      transition: 'all 0.2s'
+                      border: "none",
+                      cursor: "pointer",
+                      fontWeight: view === "outputs" ? "600" : "400",
+                      backgroundColor: view === "outputs" ? "#14B8A6" : "transparent",
+                      color: view === "outputs" ? "white" : "#94a3b8",
+                      transition: "all 0.2s",
                     }}
                     onMouseEnter={(e) => {
-                      if (view !== 'outputs') {
-                        e.target.style.color = '#14B8A6';
+                      if (view !== "outputs") {
+                        e.target.style.color = "#14B8A6";
                       }
                     }}
                     onMouseLeave={(e) => {
-                      if (view !== 'outputs') {
-                        e.target.style.color = '#94a3b8';
+                      if (view !== "outputs") {
+                        e.target.style.color = "#94a3b8";
                       }
                     }}
                   >
                     Outputs
                   </button>
                   <button
-                    onClick={() => handleViewSwitch('inputs')}
+                    onClick={() => handleViewSwitch("inputs")}
                     className={`px-4 py-2 rounded transition-all ${
-                      view === 'inputs'
-                        ? 'bg-hoosat-teal text-white'
-                        : 'bg-transparent text-slate-400 hover:text-hoosat-teal'
+                      view === "inputs"
+                        ? "bg-hoosat-teal text-white"
+                        : "bg-transparent text-slate-400 hover:text-hoosat-teal"
                     }`}
                     style={{
-                      border: 'none',
-                      cursor: 'pointer',
-                      fontWeight: view === 'inputs' ? '600' : '400',
-                      backgroundColor: view === 'inputs' ? '#14B8A6' : 'transparent',
-                      color: view === 'inputs' ? 'white' : '#94a3b8',
-                      transition: 'all 0.2s'
+                      border: "none",
+                      cursor: "pointer",
+                      fontWeight: view === "inputs" ? "600" : "400",
+                      backgroundColor: view === "inputs" ? "#14B8A6" : "transparent",
+                      color: view === "inputs" ? "white" : "#94a3b8",
+                      transition: "all 0.2s",
                     }}
                     onMouseEnter={(e) => {
-                      if (view !== 'inputs') {
-                        e.target.style.color = '#14B8A6';
+                      if (view !== "inputs") {
+                        e.target.style.color = "#14B8A6";
                       }
                     }}
                     onMouseLeave={(e) => {
-                      if (view !== 'inputs') {
-                        e.target.style.color = '#94a3b8';
+                      if (view !== "inputs") {
+                        e.target.style.color = "#94a3b8";
                       }
                     }}
                   >
@@ -446,9 +512,11 @@ const TransactionInfo = () => {
           <Row className="mt-4">
             <Col>
               <div className="bg-hoosat-slate/50 backdrop-blur-lg p-8 rounded-2xl border border-slate-700 h-full w-full">
-                <Row className="mb-3 pb-3 align-items-center" style={{ borderBottom: '1px solid #334155' }}>
+                <Row className="mb-3 pb-3 align-items-center" style={{ borderBottom: "1px solid #334155" }}>
                   <Col xs={12} md={6} className="d-flex flex-row align-items-center mb-3 mb-md-0">
-                    <h4 className="mb-0" style={{ color: '#14B8A6', fontWeight: '600' }}>Inputs ({txInfo.inputs?.length || 0})</h4>
+                    <h4 className="mb-0" style={{ color: "#14B8A6", fontWeight: "600" }}>
+                      Inputs ({txInfo.inputs?.length || 0})
+                    </h4>
                   </Col>
                 </Row>
                 {txInfo.inputs?.length > 0 ? (
@@ -473,18 +541,26 @@ const TransactionInfo = () => {
           <Row className="mt-4">
             <Col>
               <div className="bg-hoosat-slate/50 backdrop-blur-lg p-8 rounded-2xl border border-slate-700 h-full w-full">
-                <Row className="mb-3 pb-3 align-items-center" style={{ borderBottom: '1px solid #334155' }}>
+                <Row className="mb-3 pb-3 align-items-center" style={{ borderBottom: "1px solid #334155" }}>
                   <Col xs={12} md={6} className="d-flex flex-row align-items-center mb-3 mb-md-0">
-                    <h4 className="mb-0" style={{ color: '#14B8A6', fontWeight: '600' }}>Outputs ({txInfo.outputs?.length || 0})</h4>
+                    <h4 className="mb-0" style={{ color: "#14B8A6", fontWeight: "600" }}>
+                      Outputs ({txInfo.outputs?.length || 0})
+                    </h4>
                   </Col>
                 </Row>
                 {(txInfo.outputs || []).map((tx_output, idx) => (
-                  <OutputItem
-                    key={`${tx_output.index}`}
-                    txOutput={tx_output}
-                  />
+                  <OutputItem key={`${tx_output.index}`} txOutput={tx_output} />
                 ))}
               </div>
+            </Col>
+          </Row>
+        )}
+
+        {/* Script Analysis (collapsible) */}
+        {!!txInfo && txInfo?.detail !== "Transaction not found" && (
+          <Row className="mt-4">
+            <Col>
+              <ScriptAnalysisPanel txInfo={txInfo} additionalTxInfo={additionalTxInfo} />
             </Col>
           </Row>
         )}
