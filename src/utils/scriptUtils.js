@@ -5,6 +5,8 @@
 // - extractRedeemScript(sigScriptHex) -> redeemScriptHex | null
 // - detectScriptPattern(scriptHex) -> { type, details, matchType, confidence }
 
+import { blake2b } from "@noble/hashes/blake2b";
+
 const HEX_RE = /^[0-9a-fA-F]*$/;
 
 const normalizeHex = (hex) => {
@@ -49,40 +51,115 @@ const OPCODE_NAMES = {
   0x4f: "OP_1NEGATE",
   0x50: "OP_RESERVED",
 
-  // Flow
+  // Control opcodes.
   0x61: "OP_NOP",
+  0x62: "OP_VER",
   0x63: "OP_IF",
   0x64: "OP_NOTIF",
+  0x65: "OP_VERIF",
+  0x66: "OP_VERNOTIF",
   0x67: "OP_ELSE",
   0x68: "OP_ENDIF",
   0x69: "OP_VERIFY",
   0x6a: "OP_RETURN",
+  0xb0: "OP_CHECKLOCKTIMEVERIFY",
+  0xb1: "OP_CHECKSEQUENCEVERIFY",
 
-  // Stack
+  // Stack opcodes.
+  0x6b: "OP_TOALTSTACK",
+  0x6c: "OP_FROMALTSTACK",
+  0x6d: "OP_2DROP",
+  0x6e: "OP_2DUP",
+  0x6f: "OP_3DUP",
+  0x70: "OP_2OVER",
+  0x71: "OP_2ROT",
+  0x72: "OP_2SWAP",
+  0x73: "OP_IFDUP",
+  0x74: "OP_DEPTH",
   0x75: "OP_DROP",
   0x76: "OP_DUP",
+  0x77: "OP_NIP",
+  0x78: "OP_OVER",
+  0x79: "OP_PICK",
+  0x7a: "OP_ROLL",
+  0x7b: "OP_ROT",
+  0x7c: "OP_SWAP",
+  0x7d: "OP_TUCK",
 
-  // Crypto
-  0xa6: "OP_RIPEMD160",
-  0xa7: "OP_SHA1",
+  // Splice opcodes.
+  0x7e: "OP_CAT",
+  0x7f: "OP_SUBSTR",
+  0x80: "OP_LEFT",
+  0x81: "OP_RIGHT",
+  0x82: "OP_SIZE",
+
+  // Bitwise logic / comparisons.
+  0x83: "OP_INVERT",
+  0x84: "OP_AND",
+  0x85: "OP_OR",
+  0x86: "OP_XOR",
+  0x87: "OP_EQUAL",
+  0x88: "OP_EQUALVERIFY",
+  0x89: "OP_RESERVED1",
+  0x8a: "OP_RESERVED2",
+
+  // Numeric opcodes.
+  0x8b: "OP_1ADD",
+  0x8c: "OP_1SUB",
+  0x8d: "OP_2MUL",
+  0x8e: "OP_2DIV",
+  0x8f: "OP_NEGATE",
+  0x90: "OP_ABS",
+  0x91: "OP_NOT",
+  0x92: "OP_0NOTEQUAL",
+  0x93: "OP_ADD",
+  0x94: "OP_SUB",
+  0x95: "OP_MUL",
+  0x96: "OP_DIV",
+  0x97: "OP_MOD",
+  0x98: "OP_LSHIFT",
+  0x99: "OP_RSHIFT",
+  0x9a: "OP_BOOLAND",
+  0x9b: "OP_BOOLOR",
+  0x9c: "OP_NUMEQUAL",
+  0x9d: "OP_NUMEQUALVERIFY",
+  0x9e: "OP_NUMNOTEQUAL",
+  0x9f: "OP_LESSTHAN",
+  0xa0: "OP_GREATERTHAN",
+  0xa1: "OP_LESSTHANOREQUAL",
+  0xa2: "OP_GREATERTHANOREQUAL",
+  0xa3: "OP_MIN",
+  0xa4: "OP_MAX",
+  0xa5: "OP_WITHIN",
+
+  // Crypto opcodes (Hoosat/HTND).
+  0xa6: "OP_UNKNOWN166",
+  0xa7: "OP_UNKNOWN167",
   0xa8: "OP_SHA256",
-  0xa9: "OP_HASH160",
-  0xaa: "OP_HASH256",
+  0xa9: "OP_CHECKMULTISIGECDSA",
+  0xaa: "OP_BLAKE2B",
+  0xab: "OP_CHECKSIGECDSA",
   0xac: "OP_CHECKSIG",
   0xad: "OP_CHECKSIGVERIFY",
   0xae: "OP_CHECKMULTISIG",
   0xaf: "OP_CHECKMULTISIGVERIFY",
 
-  // Bit logic / comparisons
-  0x87: "OP_EQUAL",
-  0x88: "OP_EQUALVERIFY",
+  // Special/invalid.
+  0xfa: "OP_SMALLINTEGER",
+  0xfb: "OP_PUBKEYS",
+  0xfd: "OP_PUBKEYHASH",
+  0xfe: "OP_PUBKEY",
+  0xff: "OP_INVALIDOPCODE",
 };
 
 const opcodeName = (opcode) => {
   // Small push opcodes 0x01..0x4b are push-bytes.
-  if (opcode >= 0x01 && opcode <= 0x4b) return `OP_PUSHBYTES_${opcode}`;
+  // HTND disassembly uses OP_DATA_n for these.
+  if (opcode >= 0x01 && opcode <= 0x4b) return `OP_DATA_${opcode}`;
   // OP_1..OP_16
   if (opcode >= 0x51 && opcode <= 0x60) return `OP_${opcode - 0x50}`;
+  // HTND uses OP_UNKNOWN### (decimal) for reserved/unknown opcode values.
+  if ((opcode >= 0xb2 && opcode <= 0xf9) || opcode === 0xfc) return `OP_UNKNOWN${opcode}`;
   if (OPCODE_NAMES[opcode]) return OPCODE_NAMES[opcode];
   return `OP_${opcode.toString(16).padStart(2, "0")}`.toUpperCase();
 };
@@ -161,6 +238,17 @@ export const disassembleScript = (scriptHex) => {
 };
 
 /**
+ * Compute BLAKE2b-256 digest of raw script bytes (hex -> hex).
+ * Used for Hoosat P2SH script hash matching.
+ */
+export const blake2b256Hex = (dataHex) => {
+  const hex = normalizeHex(dataHex);
+  if (!hex) return "";
+  const digest = blake2b(hexToBytes(hex), { dkLen: 32 });
+  return bytesToHex(digest);
+};
+
+/**
  * Extract redeem script from a signatureScript (P2SH spending).
  * Convention (Bitcoin/Kaspa-like): redeem script is the last pushed data item.
  */
@@ -195,7 +283,9 @@ const redeemLooksLikeScript = (redeemScriptHex) => {
   return names.some(
     (n) =>
       n === "OP_CHECKSIG" ||
+      n === "OP_CHECKSIGECDSA" ||
       n === "OP_CHECKMULTISIG" ||
+      n === "OP_CHECKMULTISIGECDSA" ||
       n === "OP_IF" ||
       n === "OP_NOTIF" ||
       n === "OP_ELSE" ||
@@ -236,7 +326,30 @@ export const detectScriptPattern = (scriptHex) => {
     return { type: "OP_RETURN", details: {}, matchType: "exact", confidence: 1 };
   }
 
-  // P2PKH: OP_DUP OP_HASH160 PUSH(20) <20-byte> OP_EQUALVERIFY OP_CHECKSIG
+  // Hoosat pubkeyhash (address): OP_DUP OP_BLAKE2B PUSH(32) <32-byte> OP_EQUALVERIFY OP_CHECKSIG
+  // (Also support OP_CHECKSIGECDSA variant)
+  if (
+    names.length === 5 &&
+    names[0] === "OP_DUP" &&
+    names[1] === "OP_BLAKE2B" &&
+    opcodes[2]?.pushSize === 32 &&
+    !!opcodes[2]?.dataHex &&
+    names[3] === "OP_EQUALVERIFY" &&
+    (names[4] === "OP_CHECKSIG" || names[4] === "OP_CHECKSIGECDSA")
+  ) {
+    return {
+      type: "P2PKH",
+      details: {
+        pubKeyHash: opcodes[2].dataHex,
+        hashAlgo: "blake2b-256",
+        format: names[4] === "OP_CHECKSIGECDSA" ? "blake2b-32 (ecdsa)" : "blake2b-32",
+      },
+      matchType: "exact",
+      confidence: 1,
+    };
+  }
+
+  // Legacy Bitcoin-like P2PKH: OP_DUP OP_HASH160 PUSH(20) <20-byte> OP_EQUALVERIFY OP_CHECKSIG
   if (
     names.length === 5 &&
     names[0] === "OP_DUP" &&
@@ -254,7 +367,28 @@ export const detectScriptPattern = (scriptHex) => {
     };
   }
 
-  // P2SH: OP_HASH160 PUSH(20) <20-byte> OP_EQUAL
+  // Hoosat P2SH (HTND): OP_BLAKE2B PUSH(32) <32-byte scriptHash> OP_EQUAL
+  if (
+    names.length === 3 &&
+    names[0] === "OP_BLAKE2B" &&
+    opcodes[1]?.pushSize === 32 &&
+    !!opcodes[1]?.dataHex &&
+    names[2] === "OP_EQUAL"
+  ) {
+    return {
+      type: "P2SH",
+      details: {
+        scriptHash: opcodes[1].dataHex,
+        hashAlgo: "blake2b-256",
+        format: "blake2b-32",
+        scriptHashBytes: 32,
+      },
+      matchType: "exact",
+      confidence: 1,
+    };
+  }
+
+  // Legacy P2SH (Bitcoin-like): OP_HASH160 PUSH(20) <20-byte> OP_EQUAL
   if (
     names.length === 3 &&
     names[0] === "OP_HASH160" &&
@@ -264,19 +398,24 @@ export const detectScriptPattern = (scriptHex) => {
   ) {
     return {
       type: "P2SH",
-      details: { scriptHash: opcodes[1].dataHex },
+      details: {
+        scriptHash: opcodes[1].dataHex,
+        hashAlgo: "hash160",
+        format: "hash160-20",
+        scriptHashBytes: 20,
+      },
       matchType: "exact",
       confidence: 1,
     };
   }
 
-  // P2PK: PUSH(33|65) <pubkey> OP_CHECKSIG
+  // P2PK: PUSH(32|33|65) <pubkey> OP_CHECKSIG / OP_CHECKSIGECDSA
   if (
     names.length === 2 &&
     opcodes[0]?.pushSize &&
     isLikelyPubKeySize(opcodes[0].pushSize) &&
     !!opcodes[0]?.dataHex &&
-    names[1] === "OP_CHECKSIG"
+    (names[1] === "OP_CHECKSIG" || names[1] === "OP_CHECKSIGECDSA")
   ) {
     return {
       type: "P2PK",

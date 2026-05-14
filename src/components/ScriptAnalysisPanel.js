@@ -6,7 +6,7 @@ import CopyButton from "./CopyButton";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
 
-import { detectScriptPattern, disassembleScript, extractRedeemScript } from "../utils/scriptUtils";
+import { blake2b256Hex, detectScriptPattern, disassembleScript, extractRedeemScript } from "../utils/scriptUtils";
 
 const findOutputByIndex = (outputs, index) => {
   if (!Array.isArray(outputs)) return null;
@@ -28,8 +28,8 @@ const PatternBadge = ({ pattern, role }) => {
   };
 
   const detailParts = [];
-  if (pattern.details?.pubKeyHash) detailParts.push(`hash160=${truncateHex(pattern.details.pubKeyHash)}`);
-  if (pattern.details?.scriptHash) detailParts.push(`hash160=${truncateHex(pattern.details.scriptHash)}`);
+  if (pattern.details?.pubKeyHash) detailParts.push(`pubKeyHash=${truncateHex(pattern.details.pubKeyHash)}`);
+  if (pattern.details?.scriptHash) detailParts.push(`scriptHash=${truncateHex(pattern.details.scriptHash)}`);
   if (pattern.details?.pubKey)
     detailParts.push(`pubkey(${(pattern.details.pubKey.length || 0) / 2}b)=${truncateHex(pattern.details.pubKey)}`);
   if (pattern.details?.bytes) detailParts.push(`${pattern.details.bytes} bytes`);
@@ -134,10 +134,11 @@ const DisassemblyView = ({ title, scriptHex }) => {
   );
 };
 
-const classifyPush = (pushOp, pushIndex, totalPushes) => {
+const classifyPush = (pushOp, pushIndex, totalPushes, context = {}) => {
   // Best-effort guess about what the pushed data represents.
   const size = pushOp.pushSize || 0;
   const hex = pushOp.dataHex || "";
+  const patternType = context?.pattern?.type;
 
   // Redeem script tends to be the last push in a P2SH unlock.
   if (pushIndex === totalPushes - 1) {
@@ -149,6 +150,17 @@ const classifyPush = (pushOp, pushIndex, totalPushes) => {
     }
   }
 
+  // If we're looking at a recognized locking script, we can classify pushes more accurately.
+  if (patternType === "P2SH") {
+    // Hoosat/HTND P2SH: OP_BLAKE2B <32-byte scriptHash> OP_EQUAL
+    // Legacy P2SH: OP_HASH160 <20-byte scriptHash> OP_EQUAL
+    if ((size === 32 || size === 20) && pushIndex === 0) return "scriptHash";
+  }
+
+  if (patternType === "P2PKH") {
+    if (size === 20 && pushIndex === 0) return "pubKeyHash";
+  }
+
   if (size === 20) return "hash160";
   if (size === 32) return "pubkey/sha256";
   if (size === 33 || size === 65) return "pubkey";
@@ -158,7 +170,7 @@ const classifyPush = (pushOp, pushIndex, totalPushes) => {
   return "data";
 };
 
-const PushesView = ({ title, scriptHex }) => {
+const PushesView = ({ title, scriptHex, pattern }) => {
   const dis = useMemo(() => disassembleScript(scriptHex), [scriptHex]);
   const pushes = useMemo(() => dis.opcodes.filter((op) => !!op.dataHex), [dis.opcodes]);
 
@@ -172,7 +184,7 @@ const PushesView = ({ title, scriptHex }) => {
         </div>
         <CopyButton
           text={pushes
-            .map((p, idx) => `#${idx} ${classifyPush(p, idx, pushes.length)} (${p.pushSize || 0}b) ${p.dataHex}`)
+            .map((p, idx) => `#${idx} ${classifyPush(p, idx, pushes.length, { pattern })} (${p.pushSize || 0}b) ${p.dataHex}`)
             .join("\n")}
         />
       </div>
@@ -185,7 +197,7 @@ const PushesView = ({ title, scriptHex }) => {
         <div className="bg-hoosat-slate/50 border border-slate-700 rounded p-3" style={{ overflowX: "auto" }}>
           <div className="d-flex flex-column gap-2">
             {pushes.map((p, idx) => {
-              const kind = classifyPush(p, idx, pushes.length);
+              const kind = classifyPush(p, idx, pushes.length, { pattern });
               return (
                 <div key={`${p.offset}-${idx}`} className="d-flex justify-content-between gap-3 flex-wrap">
                   <div className="font-mono" style={{ fontSize: "0.85rem", wordBreak: "break-all" }}>
@@ -259,6 +271,23 @@ const ScriptAnalysisPanel = ({ txInfo, additionalTxInfo, autoAnalyze = true }) =
         const redeemScriptHex = isP2sh ? extractRedeemScript(signatureScript) : null;
         const redeemPattern = redeemScriptHex ? detectScriptPattern(redeemScriptHex) : null;
 
+        // Compute Hoosat P2SH hash match when possible:
+        // prev scriptPubKey: OP_BLAKE2B <32-byte scriptHash> OP_EQUAL
+        // redeem script hash: BLAKE2b-256(redeemScript)
+        let p2shHashExpected = null;
+        let p2shHashActual = null;
+        let p2shHashMatch = null;
+        if (
+          prevPattern?.type === "P2SH" &&
+          prevPattern?.details?.hashAlgo === "blake2b-256" &&
+          prevPattern?.details?.scriptHash &&
+          redeemScriptHex
+        ) {
+          p2shHashExpected = prevPattern.details.scriptHash;
+          p2shHashActual = blake2b256Hex(redeemScriptHex);
+          if (p2shHashActual) p2shHashMatch = p2shHashActual === p2shHashExpected;
+        }
+
         return {
           idx,
           previousOutpointHash: inp.previous_outpoint_hash,
@@ -270,6 +299,9 @@ const ScriptAnalysisPanel = ({ txInfo, additionalTxInfo, autoAnalyze = true }) =
           sigPattern,
           redeemScriptHex,
           redeemPattern,
+          p2shHashExpected,
+          p2shHashActual,
+          p2shHashMatch,
         };
       });
 
@@ -363,8 +395,16 @@ const ScriptAnalysisPanel = ({ txInfo, additionalTxInfo, autoAnalyze = true }) =
                 signatureScript
               </div>
               <PatternBadge pattern={inp.sigPattern} role="Unlocking" />
+              {typeof inp.p2shHashMatch === "boolean" && (
+                <div className="mt-2 font-mono" style={{ fontSize: "0.82rem", wordBreak: "break-word" }}>
+                  <span className="text-slate-500">p2sh_hash_match:</span>{" "}
+                  <span className={inp.p2shHashMatch ? "text-success" : "text-danger"}>
+                    {inp.p2shHashMatch ? "true" : "false"}
+                  </span>
+                </div>
+              )}
               <CodeBlock title="signatureScript (hex)" value={inp.signatureScript} />
-              <PushesView title="signatureScript (pushed data)" scriptHex={inp.signatureScript} />
+              <PushesView title="signatureScript (pushed data)" scriptHex={inp.signatureScript} pattern={inp.sigPattern} />
               <DisassemblyView title="signatureScript (disassembled)" scriptHex={inp.signatureScript} />
             </div>
           </div>
@@ -403,7 +443,7 @@ const ScriptAnalysisPanel = ({ txInfo, additionalTxInfo, autoAnalyze = true }) =
             <div className="mt-3">
               <PatternBadge pattern={out.pattern} role="Locking" />
               <CodeBlock title="scriptPubKey (hex)" value={out.scriptPubKey} />
-              <PushesView title="scriptPubKey (pushed data)" scriptHex={out.scriptPubKey} />
+              <PushesView title="scriptPubKey (pushed data)" scriptHex={out.scriptPubKey} pattern={out.pattern} />
               <DisassemblyView title="scriptPubKey (disassembled)" scriptHex={out.scriptPubKey} />
             </div>
           </div>
@@ -433,7 +473,7 @@ const ScriptAnalysisPanel = ({ txInfo, additionalTxInfo, autoAnalyze = true }) =
             </div>
 
             <CodeBlock title="redeemScript (hex)" value={rs.redeemScriptHex} />
-            <PushesView title="redeemScript (pushed data)" scriptHex={rs.redeemScriptHex} />
+            <PushesView title="redeemScript (pushed data)" scriptHex={rs.redeemScriptHex} pattern={rs.pattern} />
             <DisassemblyView title="redeemScript (decoded/disassembled)" scriptHex={rs.redeemScriptHex} />
           </div>
         ))}
