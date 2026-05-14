@@ -15,18 +15,42 @@ const findOutputByIndex = (outputs, index) => {
   return outputs.find((o) => o && o.index === index) || null;
 };
 
-const PatternBadge = ({ pattern }) => {
+const PatternBadge = ({ pattern, role }) => {
   if (!pattern) return null;
 
   const label = `${pattern.type}${pattern.details?.format ? ` (${pattern.details.format})` : ""}`;
   const subtitle = pattern.matchType ? `${pattern.matchType} • ${Math.round((pattern.confidence || 0) * 100)}%` : null;
 
+  const truncateHex = (hex, max = 18) => {
+    if (!hex || typeof hex !== "string") return null;
+    if (hex.length <= max) return hex;
+    return `${hex.slice(0, Math.floor(max / 2))}…${hex.slice(-Math.floor(max / 2))}`;
+  };
+
+  const detailParts = [];
+  if (pattern.details?.pubKeyHash) detailParts.push(`hash160=${truncateHex(pattern.details.pubKeyHash)}`);
+  if (pattern.details?.scriptHash) detailParts.push(`hash160=${truncateHex(pattern.details.scriptHash)}`);
+  if (pattern.details?.pubKey)
+    detailParts.push(`pubkey(${(pattern.details.pubKey.length || 0) / 2}b)=${truncateHex(pattern.details.pubKey)}`);
+  if (pattern.details?.bytes) detailParts.push(`${pattern.details.bytes} bytes`);
+  if (pattern.details?.redeemScriptBytes) detailParts.push(`redeem=${pattern.details.redeemScriptBytes} bytes`);
+  if (pattern.details?.signatureBytes) detailParts.push(`sig=${pattern.details.signatureBytes} bytes`);
+  if (pattern.details?.m && pattern.details?.n) detailParts.push(`${pattern.details.m}-of-${pattern.details.n}`);
+
   return (
     <div className="d-flex flex-wrap align-items-center gap-2">
+      {role && (
+        <span className="badge rounded-pill bg-hoosat-slate/50 border border-slate-700 text-slate-400">{role}</span>
+      )}
       <span className="badge rounded-pill bg-hoosat-slate/50 border border-slate-700 text-slate-200">{label}</span>
       {subtitle && (
         <span className="text-slate-400" style={{ fontSize: "0.8rem" }}>
           {subtitle}
+        </span>
+      )}
+      {detailParts.length > 0 && (
+        <span className="text-slate-500 font-mono" style={{ fontSize: "0.78rem", wordBreak: "break-all" }}>
+          {detailParts.join(" • ")}
         </span>
       )}
     </div>
@@ -71,6 +95,12 @@ const DisassemblyView = ({ title, scriptHex }) => {
         <CopyButton text={dis.asm || ""} />
       </div>
 
+      {dis.isMalformed && (
+        <div className="text-warning mb-2" style={{ fontSize: "0.82rem" }}>
+          Warning: script parsing stopped early ({dis.error || "malformed push"}).
+        </div>
+      )}
+
       <div className="bg-hoosat-slate/50 border border-slate-700 rounded p-3" style={{ overflowX: "auto" }}>
         {dis.opcodes.length === 0 ? (
           <div className="text-slate-400" style={{ fontSize: "0.85rem" }}>
@@ -100,6 +130,104 @@ const DisassemblyView = ({ title, scriptHex }) => {
           </div>
         )}
       </div>
+    </div>
+  );
+};
+
+const classifyPush = (pushOp, pushIndex, totalPushes) => {
+  // Best-effort guess about what the pushed data represents.
+  const size = pushOp.pushSize || 0;
+  const hex = pushOp.dataHex || "";
+
+  // Redeem script tends to be the last push in a P2SH unlock.
+  if (pushIndex === totalPushes - 1) {
+    const redeemDis = disassembleScript(hex);
+    if (
+      redeemDis.opcodes.some((o) => o.name === "OP_CHECKSIG" || o.name === "OP_CHECKMULTISIG" || o.name === "OP_IF")
+    ) {
+      return "redeemScript";
+    }
+  }
+
+  if (size === 20) return "hash160";
+  if (size === 32) return "pubkey/sha256";
+  if (size === 33 || size === 65) return "pubkey";
+  if (size >= 60 && size <= 80) return "signature";
+  if (size === 0) return "empty";
+
+  return "data";
+};
+
+const PushesView = ({ title, scriptHex }) => {
+  const dis = useMemo(() => disassembleScript(scriptHex), [scriptHex]);
+  const pushes = useMemo(() => dis.opcodes.filter((op) => !!op.dataHex), [dis.opcodes]);
+
+  if (!scriptHex) return null;
+
+  return (
+    <div className="mt-3">
+      <div className="d-flex justify-content-between align-items-center mb-2 gap-2">
+        <div className="text-slate-400 text-xs" style={{ fontWeight: 600 }}>
+          {title}
+        </div>
+        <CopyButton
+          text={pushes
+            .map((p, idx) => `#${idx} ${classifyPush(p, idx, pushes.length)} (${p.pushSize || 0}b) ${p.dataHex}`)
+            .join("\n")}
+        />
+      </div>
+
+      {pushes.length === 0 ? (
+        <div className="text-slate-400" style={{ fontSize: "0.85rem" }}>
+          No pushed data items
+        </div>
+      ) : (
+        <div className="bg-hoosat-slate/50 border border-slate-700 rounded p-3" style={{ overflowX: "auto" }}>
+          <div className="d-flex flex-column gap-2">
+            {pushes.map((p, idx) => {
+              const kind = classifyPush(p, idx, pushes.length);
+              return (
+                <div key={`${p.offset}-${idx}`} className="d-flex justify-content-between gap-3 flex-wrap">
+                  <div className="font-mono" style={{ fontSize: "0.85rem", wordBreak: "break-all" }}>
+                    <span className="text-slate-500">#{idx}</span> <span className="text-hoosat-teal">{kind}</span>{" "}
+                    <span className="text-slate-500">({p.pushSize || 0}b)</span>{" "}
+                    <span className="text-slate-300">{p.dataHex}</span>
+                  </div>
+                  <div className="d-flex align-items-center">
+                    <CopyButton text={p.dataHex || ""} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const SummaryStrip = ({ analysis }) => {
+  if (!analysis) return null;
+  const p2shInputs = analysis.inputs.filter(
+    (i) => i.prevPattern?.type === "P2SH" || i.sigPattern?.type?.includes("P2SH"),
+  ).length;
+  const opReturnOutputs = analysis.outputs.filter(
+    (o) => o.pattern?.type === "Data Carrier" || o.pattern?.type === "OP_RETURN",
+  ).length;
+  const multisig = analysis.outputs.filter((o) => o.pattern?.type === "P2MS").length;
+
+  const pill = (text) => (
+    <span className="badge rounded-pill bg-hoosat-slate/50 border border-slate-700 text-slate-200">{text}</span>
+  );
+
+  return (
+    <div className="d-flex flex-wrap gap-2 mb-3">
+      {pill(`Inputs: ${analysis.inputs.length}`)}
+      {pill(`Outputs: ${analysis.outputs.length}`)}
+      {pill(`Redeem Scripts: ${analysis.redeemScripts.length}`)}
+      {pill(`P2SH Inputs: ${p2shInputs}`)}
+      {pill(`OP_RETURN: ${opReturnOutputs}`)}
+      {pill(`Multisig: ${multisig}`)}
     </div>
   );
 };
@@ -225,7 +353,7 @@ const ScriptAnalysisPanel = ({ txInfo, additionalTxInfo, autoAnalyze = true }) =
               <div className="text-slate-400 text-xs mb-2" style={{ fontWeight: 600 }}>
                 Previous Output Script (spends)
               </div>
-              <PatternBadge pattern={inp.prevPattern} />
+              <PatternBadge pattern={inp.prevPattern} role="Locking" />
               <CodeBlock title="scriptPubKey (hex)" value={inp.prevScriptPubKey} />
               <DisassemblyView title="scriptPubKey (disassembled)" scriptHex={inp.prevScriptPubKey} />
             </div>
@@ -234,8 +362,9 @@ const ScriptAnalysisPanel = ({ txInfo, additionalTxInfo, autoAnalyze = true }) =
               <div className="text-slate-400 text-xs mb-2" style={{ fontWeight: 600 }}>
                 signatureScript
               </div>
-              <PatternBadge pattern={inp.sigPattern} />
+              <PatternBadge pattern={inp.sigPattern} role="Unlocking" />
               <CodeBlock title="signatureScript (hex)" value={inp.signatureScript} />
+              <PushesView title="signatureScript (pushed data)" scriptHex={inp.signatureScript} />
               <DisassemblyView title="signatureScript (disassembled)" scriptHex={inp.signatureScript} />
             </div>
           </div>
@@ -272,8 +401,9 @@ const ScriptAnalysisPanel = ({ txInfo, additionalTxInfo, autoAnalyze = true }) =
             </div>
 
             <div className="mt-3">
-              <PatternBadge pattern={out.pattern} />
+              <PatternBadge pattern={out.pattern} role="Locking" />
               <CodeBlock title="scriptPubKey (hex)" value={out.scriptPubKey} />
+              <PushesView title="scriptPubKey (pushed data)" scriptHex={out.scriptPubKey} />
               <DisassemblyView title="scriptPubKey (disassembled)" scriptHex={out.scriptPubKey} />
             </div>
           </div>
@@ -299,10 +429,11 @@ const ScriptAnalysisPanel = ({ txInfo, additionalTxInfo, autoAnalyze = true }) =
               <div className="text-slate-200" style={{ fontWeight: 600 }}>
                 Input #{rs.inputIndex}
               </div>
-              <PatternBadge pattern={rs.pattern} />
+              <PatternBadge pattern={rs.pattern} role="Locking" />
             </div>
 
             <CodeBlock title="redeemScript (hex)" value={rs.redeemScriptHex} />
+            <PushesView title="redeemScript (pushed data)" scriptHex={rs.redeemScriptHex} />
             <DisassemblyView title="redeemScript (decoded/disassembled)" scriptHex={rs.redeemScriptHex} />
           </div>
         ))}
@@ -376,6 +507,7 @@ const ScriptAnalysisPanel = ({ txInfo, additionalTxInfo, autoAnalyze = true }) =
             style={{ overflow: "hidden" }}
           >
             <div className="mt-4">
+              <SummaryStrip analysis={analysis} />
               <div
                 className="d-flex gap-2 p-1 rounded"
                 style={{ backgroundColor: "rgba(30, 41, 59, 0.6)", border: "1px solid #334155" }}

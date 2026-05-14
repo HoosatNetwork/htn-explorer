@@ -106,13 +106,15 @@ const isPushOpcode = (opcode) => {
  */
 export const disassembleScript = (scriptHex) => {
   const hex = normalizeHex(scriptHex);
-  if (!hex) return { opcodes: [], asm: "" };
+  if (!hex) return { opcodes: [], asm: "", isMalformed: false, error: null };
 
   const bytes = hexToBytes(hex);
   /** @type {ScriptOp[]} */
   const ops = [];
 
   let i = 0;
+  let isMalformed = false;
+  let error = null;
   while (i < bytes.length) {
     const offset = i;
     const opcode = bytes[i];
@@ -141,6 +143,8 @@ export const disassembleScript = (scriptHex) => {
       if (pushSize < 0 || i + pushSize > bytes.length) {
         // Malformed push. Stop parsing to avoid misleading output.
         ops.push({ offset, opcode, name: opcodeName(opcode), pushSize, dataHex: null });
+        isMalformed = true;
+        error = `Malformed push at offset ${offset} (pushSize=${pushSize})`;
         break;
       }
       const data = bytes.slice(i, i + pushSize);
@@ -153,7 +157,7 @@ export const disassembleScript = (scriptHex) => {
 
   const asm = ops.map((op) => (op.dataHex ? `${op.name} ${op.dataHex}` : op.name)).join("\n");
 
-  return { opcodes: ops, asm };
+  return { opcodes: ops, asm, isMalformed, error };
 };
 
 /**
@@ -314,9 +318,37 @@ export const detectScriptPattern = (scriptHex) => {
   }
 
   // Signature script heuristics (useful for Inputs tab)
+  // Typical P2PK sigScript: <sig>
+  // (We keep this heuristic narrow; many scripts are just pushes.)
+  if (opcodes.length === 1 && opcodes[0]?.dataHex && opcodes[0]?.pushSize >= 60 && opcodes[0]?.pushSize <= 80) {
+    return {
+      type: "P2PK Unlock",
+      details: { signatureBytes: opcodes[0].pushSize },
+      matchType: "heuristic",
+      confidence: 0.6,
+    };
+  }
+
   // Typical P2PKH sigScript: <sig> <pubkey>
   if (opcodes.length === 2 && opcodes[0]?.dataHex && opcodes[1]?.dataHex && isLikelyPubKeySize(opcodes[1].pushSize)) {
     return { type: "P2PKH Unlock", details: {}, matchType: "heuristic", confidence: 0.7 };
+  }
+
+  // Typical multisig (P2MS) unlock in a P2SH sigScript: OP_0 <sig>... <redeemScript>
+  // If the redeemScript decodes as a bare multisig script, label it explicitly.
+  if (names[0] === "OP_0" && opcodes.length >= 3) {
+    const redeem = extractRedeemScript(hex);
+    if (redeem && redeemLooksLikeScript(redeem)) {
+      const redeemPat = detectScriptPattern(redeem);
+      if (redeemPat?.type === "P2MS") {
+        return {
+          type: "P2MS Unlock",
+          details: { ...redeemPat.details, redeemScriptBytes: redeem.length / 2 },
+          matchType: "heuristic",
+          confidence: 0.8,
+        };
+      }
+    }
   }
 
   // Likely P2SH sigScript: multiple pushes and last push is a *script* (not just a pubkey/hash).
