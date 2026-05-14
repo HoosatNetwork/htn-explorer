@@ -177,6 +177,30 @@ const opNToInt = (opName) => {
   return parseInt(opName.replace("OP_", ""), 10);
 };
 
+// Hoosat/Kaspa typically uses 32-byte public keys (Schnorr),
+// but we also support Bitcoin-like 33/65 byte pubkeys.
+const isLikelyPubKeySize = (n) => n === 32 || n === 33 || n === 65;
+
+const redeemLooksLikeScript = (redeemScriptHex) => {
+  if (!redeemScriptHex) return false;
+  const { opcodes } = disassembleScript(redeemScriptHex);
+  if (!opcodes || opcodes.length === 0) return false;
+
+  // If the redeemScript contains any non-push, non-trivial opcode, it is likely a real script.
+  const names = opcodes.map((o) => o.name);
+  return names.some(
+    (n) =>
+      n === "OP_CHECKSIG" ||
+      n === "OP_CHECKMULTISIG" ||
+      n === "OP_IF" ||
+      n === "OP_NOTIF" ||
+      n === "OP_ELSE" ||
+      n === "OP_ENDIF" ||
+      n === "OP_VERIFY" ||
+      n === "OP_RETURN",
+  );
+};
+
 /**
  * Detect common script patterns. Returns a best-effort classification.
  *
@@ -246,7 +270,7 @@ export const detectScriptPattern = (scriptHex) => {
   if (
     names.length === 2 &&
     opcodes[0]?.pushSize &&
-    (opcodes[0].pushSize === 33 || opcodes[0].pushSize === 65) &&
+    isLikelyPubKeySize(opcodes[0].pushSize) &&
     !!opcodes[0]?.dataHex &&
     names[1] === "OP_CHECKSIG"
   ) {
@@ -269,9 +293,7 @@ export const detectScriptPattern = (scriptHex) => {
     const n = opNToInt(names[names.length - 2]);
 
     const pubkeyOps = opcodes.slice(1, -2);
-    const pubkeys = pubkeyOps
-      .filter((o) => !!o.dataHex && (o.pushSize === 33 || o.pushSize === 65))
-      .map((o) => o.dataHex);
+    const pubkeys = pubkeyOps.filter((o) => !!o.dataHex && isLikelyPubKeySize(o.pushSize)).map((o) => o.dataHex);
 
     if (m !== null && n !== null && pubkeys.length === pubkeyOps.length && pubkeys.length === n) {
       return {
@@ -293,24 +315,20 @@ export const detectScriptPattern = (scriptHex) => {
 
   // Signature script heuristics (useful for Inputs tab)
   // Typical P2PKH sigScript: <sig> <pubkey>
-  if (
-    opcodes.length === 2 &&
-    opcodes[0]?.dataHex &&
-    opcodes[1]?.dataHex &&
-    (opcodes[1].pushSize === 33 || opcodes[1].pushSize === 65)
-  ) {
+  if (opcodes.length === 2 && opcodes[0]?.dataHex && opcodes[1]?.dataHex && isLikelyPubKeySize(opcodes[1].pushSize)) {
     return { type: "P2PKH Unlock", details: {}, matchType: "heuristic", confidence: 0.7 };
   }
 
-  // Likely P2SH sigScript: multiple pushes and last push is redeem script
+  // Likely P2SH sigScript: multiple pushes and last push is a *script* (not just a pubkey/hash).
+  // Important: keep this heuristic strict, otherwise it will mislabel most scripts.
   if (opcodes.length >= 2) {
     const redeem = extractRedeemScript(hex);
-    if (redeem && redeem.length >= 2) {
+    if (redeem && redeem.length >= 2 && redeemLooksLikeScript(redeem)) {
       return {
         type: "P2SH Unlock",
         details: { redeemScriptBytes: redeem.length / 2 },
         matchType: "heuristic",
-        confidence: 0.6,
+        confidence: 0.75,
       };
     }
   }

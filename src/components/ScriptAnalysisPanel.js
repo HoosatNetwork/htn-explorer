@@ -165,11 +165,15 @@ const ScriptAnalysisPanel = ({ txInfo, additionalTxInfo, autoAnalyze = true }) =
         }));
 
       setAnalysis({ txid: txInfo.transaction_id, inputs, outputs, redeemScripts });
-      setIsOpen(true);
     } finally {
       setIsAnalyzing(false);
     }
   }, [additionalTxInfo, canAnalyze, txInfo]);
+
+  const handleAnalyzeClick = useCallback(() => {
+    analyzeScripts();
+    setIsOpen(true);
+  }, [analyzeScripts]);
 
   useEffect(() => {
     if (!autoAnalyze) return;
@@ -201,9 +205,9 @@ const ScriptAnalysisPanel = ({ txInfo, additionalTxInfo, autoAnalyze = true }) =
         {analysis.inputs.map((inp) => (
           <div
             key={`${inp.previousOutpointHash}-${inp.previousOutpointIndex}`}
-            className="bg-hoosat-slate/50 backdrop-blur-lg border border-slate-700 rounded p-4"
+            className="bg-hoosat-slate/50 backdrop-blur-lg border border-slate-700 rounded p-4 text-start"
           >
-            <div className="d-flex justify-content-between align-items-start flex-wrap gap-2">
+            <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 text-start">
               <div>
                 <div className="text-slate-200" style={{ fontWeight: 600 }}>
                   Input #{inp.idx}
@@ -251,9 +255,9 @@ const ScriptAnalysisPanel = ({ txInfo, additionalTxInfo, autoAnalyze = true }) =
         {analysis.outputs.map((out) => (
           <div
             key={`out-${out.index}`}
-            className="bg-hoosat-slate/50 backdrop-blur-lg border border-slate-700 rounded p-4"
+            className="bg-hoosat-slate/50 backdrop-blur-lg border border-slate-700 rounded p-4 text-start"
           >
-            <div className="d-flex justify-content-between align-items-start flex-wrap gap-2">
+            <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 text-start">
               <div>
                 <div className="text-slate-200" style={{ fontWeight: 600 }}>
                   Output #{out.index}
@@ -289,15 +293,13 @@ const ScriptAnalysisPanel = ({ txInfo, additionalTxInfo, autoAnalyze = true }) =
         {analysis.redeemScripts.map((rs) => (
           <div
             key={`redeem-${rs.inputIndex}`}
-            className="bg-hoosat-slate/50 backdrop-blur-lg border border-slate-700 rounded p-4"
+            className="bg-hoosat-slate/50 backdrop-blur-lg border border-slate-700 rounded p-4 text-start"
           >
-            <div className="d-flex justify-content-between align-items-start flex-wrap gap-2">
-              <div>
-                <div className="text-slate-200" style={{ fontWeight: 600 }}>
-                  Input #{rs.inputIndex}
-                </div>
-                <PatternBadge pattern={rs.pattern} />
+            <div className="d-flex flex-column align-items-start gap-2 text-start">
+              <div className="text-slate-200" style={{ fontWeight: 600 }}>
+                Input #{rs.inputIndex}
               </div>
+              <PatternBadge pattern={rs.pattern} />
             </div>
 
             <CodeBlock title="redeemScript (hex)" value={rs.redeemScriptHex} />
@@ -354,7 +356,11 @@ const ScriptAnalysisPanel = ({ txInfo, additionalTxInfo, autoAnalyze = true }) =
           <span>Script Analysis</span>
         </button>
 
-        <button onClick={analyzeScripts} disabled={!canAnalyze || isAnalyzing} className="btn btn-sm btn-outline-info">
+        <button
+          onClick={handleAnalyzeClick}
+          disabled={!canAnalyze || isAnalyzing}
+          className="btn btn-sm btn-outline-info"
+        >
           {isAnalyzing ? "Analyzing…" : "Analyze Scripts"}
         </button>
       </div>
