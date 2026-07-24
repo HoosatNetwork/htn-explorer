@@ -219,7 +219,7 @@ const AddressesPage = () => {
   useEffect(() => {
     const addTagAddressesFromFile = async (tag) => {
       try {
-        const response = await fetch(`https://shitlist.hoosat.fi/tags/tags.csv`);
+        const response = await fetch(`https://network.hoosat.fi/downloads/tags/tags.csv`);
         const addressesResponse = await response.text();
         const addressesRows = addressesResponse.trim().split("\n");
         const parsedAddresses = addressesRows.map((row, _) => {
