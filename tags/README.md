@@ -32,16 +32,26 @@ hoosat:qzm5vg7uv66ze6mv8d32xhv50sxwhthkz9ly7049e87hr2rm7wr6zjxytztv7,Burn Addres
 
 ## Adding or changing a label
 
-Edit or add the line in its sorted position, then run
+Edit [`address-tags.csv`](https://github.com/HoosatNetwork/htn-explorer/edit/main/tags/address-tags.csv)
+on GitHub: add or change the line in its sorted position and propose the
+change as a pull request (GitHub forks the repository for you if you cannot
+write to it). Say in the pull request why the label is right: an
+announcement, a transaction, or the address owner's own statement. One
+approval from either explorer operator (@QbaWr or @Chargn-htn) is enough to
+merge it.
+
+## Reviewing a change
+
+The operator who reviews the pull request checks its version of the list
+before approving it:
 
 ```sh
+gh pr checkout <number>
 python3 tags/validate_tags.py tags/address-tags.csv
-python3 tags/test_validate_tags.py
 ```
 
-and open a pull request that says why the label is right: an announcement, a
-transaction, or the address owner's own statement. One approval from either
-explorer operator (@QbaWr or @Chargn-htn) is enough to merge it.
+A change to `validate_tags.py` itself also needs
+`python3 tags/test_validate_tags.py`.
 
 ## Using the list on an explorer
 
@@ -49,7 +59,13 @@ Fetch the raw file from `main`
 (`https://raw.githubusercontent.com/HoosatNetwork/htn-explorer/main/tags/address-tags.csv`),
 check it with your own copy of `validate_tags.py`, and replace the rows of
 `address_tags` in one transaction. The header matches the table's columns,
-so `\copy address_tags_new (address, label) from pstdin with (format csv,
-header match)` loads it as is into a temporary table to swap from. When the
-fetch or the check fails, keep the current rows. Hand edits of the table
-are overwritten by the next sync, so change labels here.
+so this loads the file as is into a temporary table to swap from:
+
+```
+\copy address_tags_new (address, label) from pstdin with (format csv, header match)
+```
+
+`header match` needs PostgreSQL 15 or newer; on older servers use `header`,
+which skips the first line without checking it (the validator has already
+checked it). When the fetch or the check fails, keep the current rows. Hand
+edits of the table are overwritten by the next sync, so change labels here.
