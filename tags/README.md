@@ -20,8 +20,8 @@ hoosat:qzm5vg7uv66ze6mv8d32xhv50sxwhthkz9ly7049e87hr2rm7wr6zjxytztv7,Burn Addres
 - **Address**: a valid mainnet `hoosat:` address, lower case, correct
   checksum, a known address type with the right length, in canonical form
   (the rules of HTND's `util/bech32` and `util/address.go`).
-- **One address per line**, no address twice, rows sorted by address (byte
-  order, as `LC_ALL=C sort`), so two pull requests rarely touch the same line.
+- **One address per line**, no address twice, in any order (adding a new
+  line at the end is fine).
 - **Label**: plain text, 1 to 40 characters; Latin letters (accents allowed),
   digits, space and `. - _ ( ) & ' / + #`; starts with a letter or digit; no
   trailing or double spaces; no commas or quotes, so the file needs no CSV
@@ -33,7 +33,7 @@ hoosat:qzm5vg7uv66ze6mv8d32xhv50sxwhthkz9ly7049e87hr2rm7wr6zjxytztv7,Burn Addres
 ## Adding or changing a label
 
 Edit [`address-tags.csv`](https://github.com/HoosatNetwork/htn-explorer/edit/main/tags/address-tags.csv)
-on GitHub: add or change the line in its sorted position and propose the
+on GitHub: add or change the line (anywhere, the end is fine) and propose the
 change as a pull request (GitHub forks the repository for you if you cannot
 write to it). Say in the pull request why the label is right: an
 announcement, a transaction, or the address owner's own statement. One

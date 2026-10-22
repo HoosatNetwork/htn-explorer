@@ -19,8 +19,8 @@ File rules:
     exactly one comma per line (labels may not contain commas or quotes, so
     the file is valid CSV with no quoting and also splits at the first comma,
     as the explorer UI does).
-  - Rows sorted by address (byte order, as "sort" with LC_ALL=C), no address
-    twice, no label twice (compared case-insensitively).
+  - No address twice, no label twice (compared case-insensitively). Row
+    order is free: new rows may simply be appended.
 
 Address rules (HTND util/bech32 and util/address.go, v2.18.1):
   - lower case, prefix "hoosat" (mainnet; --prefix for another network),
@@ -216,7 +216,6 @@ def validate_text(raw, prefix=PREFIXES[0]):
     rows = []
     seen_addresses = {}
     seen_labels = {}
-    previous = None
     for number, line in enumerate(lines[1:], start=2):
         if line == "":
             problems.append((number, "empty line"))
@@ -242,9 +241,6 @@ def validate_text(raw, prefix=PREFIXES[0]):
             problems.append((number, "label already used on line %d" % seen_labels[folded]))
         elif label:
             seen_labels[folded] = number
-        if previous is not None and address.encode("utf-8") < previous[1].encode("utf-8"):
-            problems.append((number, "rows are not sorted by address: this one belongs before line %d" % previous[0]))
-        previous = (number, address)
         rows.append((address, label))
 
     if not rows and not problems:
