@@ -26,7 +26,7 @@ P2SH_HASH = bytes.fromhex("e8c300c87986efa84c37c0519929019ef86eb5b4e8c300c87986e
 TESTNET = "hoosattest:qputx94qseratdmjs0j395mq8u03er0x3l35ennsep3hxfe7ln35c67gazt36"
 TRUNCATED = "hoosat:qr35ennsep3hxfe7lnz5ee7j5jgmkjswss74as46gx"  # "p2pk bad checksum"
 
-# Two of the real list, sorted.
+# Two of the real list.
 A1 = "hoosat:qp4ad2eh72xc8dtjjyz4llxzq9utn6k26uyl644xxw70wskdfl85zsqj9k4vz"
 A2 = "hoosat:qzm5vg7uv66ze6mv8d32xhv50sxwhthkz9ly7049e87hr2rm7wr6zjxytztv7"
 
@@ -116,6 +116,9 @@ class Files(unittest.TestCase):
     def test_minimal_file_passes(self):
         self.assertEqual(messages(csv(A1 + ",Developer fee", A2 + ",Burn Address")), [])
 
+    def test_row_order_is_free(self):
+        self.assertEqual(messages(csv(A2 + ",Burn Address", A1 + ",Developer fee")), [])
+
     def assertFileRejected(self, raw, reason, line=None):
         problems = v.validate_text(raw)[1]
         hits = [(n, m) for n, m in problems if reason in m]
@@ -126,7 +129,6 @@ class Files(unittest.TestCase):
     def test_rejected(self):
         self.assertFileRejected(csv(A1 + ",A", A1 + ",B"), "already tagged on line 2", 3)
         self.assertFileRejected(csv(A1 + ",Burn address", A2 + ",Burn Address"), "label already used on line 2", 3)
-        self.assertFileRejected(csv(A2 + ",B", A1 + ",A"), "not sorted", 3)
         self.assertFileRejected(csv(A1 + ",Xeggex, Exit"), "exactly one comma", 2)
         self.assertFileRejected(csv(A1 + ",A", header="addr,label"), "first line must be exactly", 1)
         self.assertFileRejected(csv(A1 + ",A", "", A2 + ",B"), "empty line", 3)
