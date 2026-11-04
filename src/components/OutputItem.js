@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { numberWithCommas } from '../helper';
+import LongHex from './LongHex';
 import './UtxoItem.scss';
 
 const OutputItem = ({ txOutput }) => {
@@ -45,7 +46,7 @@ const OutputItem = ({ txOutput }) => {
             <div className="col-12 col-lg-9 mt-3">
               <div className="text-slate-400 text-xs mb-1">SCRIPT PUBLIC KEY</div>
               <div className="text-slate-300 font-mono" style={{ fontSize: '0.85rem', wordBreak: 'break-all' }}>
-                {txOutput.script_public_key}
+                <LongHex hex={txOutput.script_public_key} />
               </div>
             </div>
 

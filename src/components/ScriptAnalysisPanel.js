@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { BiChevronDown, BiChevronUp } from "react-icons/bi";
 import CopyButton from "./CopyButton";
+import LongHex, { isLongHex } from "./LongHex";
 
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
@@ -64,7 +65,23 @@ const PatternBadge = ({ pattern, role }) => {
   );
 };
 
-const CodeBlock = ({ title, value, language = "text" }) => {
+// A long hex value cannot go through SyntaxHighlighter, which takes a plain
+// string, so it is drawn with the same theme styles around LongHex.
+const LONG_HEX_PRE_STYLE = {
+  ...oneDark['pre[class*="language-"]'],
+  margin: 0,
+  background: "transparent",
+  fontSize: "0.85rem",
+};
+const LONG_HEX_CODE_STYLE = {
+  ...oneDark['code[class*="language-"]'],
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-all",
+};
+
+// isHex: value is one hex string, shortened by LongHex when it is long (the
+// header's copy button still copies all of it).
+const CodeBlock = ({ title, value, language = "text", isHex = false }) => {
   if (!value) return null;
   return (
     <div className="mt-3">
@@ -75,15 +92,23 @@ const CodeBlock = ({ title, value, language = "text" }) => {
         <CopyButton text={value} />
       </div>
       <div className="bg-hoosat-slate/50 border border-slate-700 rounded p-3" style={{ overflowX: "auto" }}>
-        <SyntaxHighlighter
-          language={language}
-          style={oneDark}
-          customStyle={{ margin: 0, background: "transparent", fontSize: "0.85rem" }}
-          wrapLongLines
-          showLineNumbers={false}
-        >
-          {value}
-        </SyntaxHighlighter>
+        {isHex && isLongHex(value) ? (
+          <pre style={LONG_HEX_PRE_STYLE}>
+            <code style={LONG_HEX_CODE_STYLE}>
+              <LongHex hex={value} showCopy={false} />
+            </code>
+          </pre>
+        ) : (
+          <SyntaxHighlighter
+            language={language}
+            style={oneDark}
+            customStyle={{ margin: 0, background: "transparent", fontSize: "0.85rem" }}
+            wrapLongLines
+            showLineNumbers={false}
+          >
+            {value}
+          </SyntaxHighlighter>
+        )}
       </div>
     </div>
   );
@@ -128,7 +153,9 @@ const DisassemblyView = ({ title, scriptHex }) => {
                   {op.name}
                 </span>
                 {op.dataHex ? (
-                  <span className="text-slate-300">{op.dataHex}</span>
+                  <span className="text-slate-300">
+                    <LongHex hex={op.dataHex} />
+                  </span>
                 ) : (
                   <span className="text-slate-500">—</span>
                 )}
@@ -215,7 +242,9 @@ const PushesView = ({ title, scriptHex, pattern }) => {
                   <div className="font-mono" style={{ fontSize: "0.85rem", wordBreak: "break-all" }}>
                     <span className="text-slate-500">#{idx}</span> <span className="text-hoosat-teal">{kind}</span>{" "}
                     <span className="text-slate-500">({p.pushSize || 0}b)</span>{" "}
-                    <span className="text-slate-300">{p.dataHex}</span>
+                    <span className="text-slate-300">
+                      <LongHex hex={p.dataHex} showCopy={false} />
+                    </span>
                   </div>
                   <div className="d-flex align-items-center">
                     <CopyButton text={p.dataHex || ""} />
@@ -398,7 +427,7 @@ const ScriptAnalysisPanel = ({ txInfo, additionalTxInfo, autoAnalyze = true }) =
                 Previous Output Script (spends)
               </div>
               <PatternBadge pattern={inp.prevPattern} role="Locking" />
-              <CodeBlock title="scriptPubKey (hex)" value={inp.prevScriptPubKey} />
+              <CodeBlock title="scriptPubKey (hex)" value={inp.prevScriptPubKey} isHex />
               <DisassemblyView title="scriptPubKey (disassembled)" scriptHex={inp.prevScriptPubKey} />
             </div>
 
@@ -415,7 +444,7 @@ const ScriptAnalysisPanel = ({ txInfo, additionalTxInfo, autoAnalyze = true }) =
                   </span>
                 </div>
               )}
-              <CodeBlock title="signatureScript (hex)" value={inp.signatureScript} />
+              <CodeBlock title="signatureScript (hex)" value={inp.signatureScript} isHex />
               <PushesView title="signatureScript (pushed data)" scriptHex={inp.signatureScript} pattern={inp.sigPattern} />
               <DisassemblyView title="signatureScript (disassembled)" scriptHex={inp.signatureScript} />
             </div>
@@ -454,7 +483,7 @@ const ScriptAnalysisPanel = ({ txInfo, additionalTxInfo, autoAnalyze = true }) =
 
             <div className="mt-3">
               <PatternBadge pattern={out.pattern} role="Locking" />
-              <CodeBlock title="scriptPubKey (hex)" value={out.scriptPubKey} />
+              <CodeBlock title="scriptPubKey (hex)" value={out.scriptPubKey} isHex />
               <PushesView title="scriptPubKey (pushed data)" scriptHex={out.scriptPubKey} pattern={out.pattern} />
               <DisassemblyView title="scriptPubKey (disassembled)" scriptHex={out.scriptPubKey} />
             </div>
@@ -484,7 +513,7 @@ const ScriptAnalysisPanel = ({ txInfo, additionalTxInfo, autoAnalyze = true }) =
               <PatternBadge pattern={rs.pattern} role="Locking" />
             </div>
 
-            <CodeBlock title="redeemScript (hex)" value={rs.redeemScriptHex} />
+            <CodeBlock title="redeemScript (hex)" value={rs.redeemScriptHex} isHex />
             <PushesView title="redeemScript (pushed data)" scriptHex={rs.redeemScriptHex} pattern={rs.pattern} />
             <DisassemblyView title="redeemScript (decoded/disassembled)" scriptHex={rs.redeemScriptHex} />
           </div>
