@@ -67,6 +67,11 @@ Create a `.env` file in the root directory:
 REACT_APP_API=https://api.hoosat.fi
 ```
 
+The dashboard's block reward and daily yield take the 5 % dev fee off the
+reward from DAA score 17,500,000 until the v12 hard fork at DAA score
+258,000,000. A build for another network or a moved fork can set
+`REACT_APP_DEV_FEE_END_DAA_SCORE` (a positive integer) to change the end.
+
 ## Project Structure
 
 ```

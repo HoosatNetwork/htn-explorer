@@ -3,6 +3,7 @@ import { HiCurrencyDollar } from "react-icons/hi";
 import { IoMdTrendingDown, IoMdTrendingUp } from "react-icons/io";
 import { numberWithCommas } from "../helper";
 import { getCoinSupply, getBlockdagInfo } from "../htn-api-client";
+import { minerShareAt } from "../devFee";
 import PriceContext from "./PriceContext";
 import { CardSkeleton } from "./SkeletonLoader";
 
@@ -20,13 +21,11 @@ const MarketDataBox = () => {
       setCircCoinsMData(Math.round(parseFloat(coin_supply.circulatingSupply) / 100000000));
       // daily yield = (your hashrate / network hashrate) * block reward * (86400 / blocks per second)
       const blockReward = await getBlockReward();
-      if (dag_info.virtualDaaScore > 17500000) {
-        setDailyYield((1 / ((dag_info.difficulty * 2) / 1000)) * (blockReward * 0.95) * (86400 / 1));
-        setDailyEmissions(blockReward * 0.95 * 86400 * 5);
-      } else {
-        setDailyYield((1 / ((dag_info.difficulty * 2) / 1000)) * blockReward * (86400 / 1));
-        setDailyEmissions(blockReward * 86400 * 5);
-      }
+      // The miner's part: the dev fee is paid only up to the v12 hard fork.
+      const minerReward = blockReward * minerShareAt(dag_info.virtualDaaScore);
+      setDailyYield((1 / ((dag_info.difficulty * 2) / 1000)) * minerReward * (86400 / 1));
+      // Every coin the blocks mint, the dev fee's included.
+      setDailyEmissions(blockReward * 86400 * 5);
     } finally {
       setIsLoading(false);
     }
