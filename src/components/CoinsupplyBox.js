@@ -2,6 +2,7 @@ import { faCoins } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import moment from "moment";
 import React, { useCallback, useEffect, useState } from "react";
+import { minerShareAt } from "../devFee";
 import { getBlockdagInfo, getCoinSupply, getHalving } from "../htn-api-client";
 import { numberWithCommas } from "../helper";
 import { CardSkeleton } from "./SkeletonLoader";
@@ -44,7 +45,11 @@ const CBox = () => {
 
           setHalvingDate(moment(halvingTimestamp).format("YYYY-MM-DD HH:mm"));
           setTimeToHalving(timeToHalving);
-          setHalvingAmount((d.nextHalvingAmount * 0.95).toFixed(2));
+          // /info/halving does not say at which DAA score the reduction
+          // happens. The next one (DAA score 299,919,264) and every later one
+          // come after the v12 hard fork that ends the dev fee, so the miner
+          // gets the whole amount.
+          setHalvingAmount(Number(d.nextHalvingAmount).toFixed(2));
         });
 
         setCircCoins(Math.round(coinSupplyResp.circulatingSupply / 100000000));
@@ -72,11 +77,8 @@ const CBox = () => {
     await fetch(`${process.env.REACT_APP_API}/info/blockreward`)
       .then((response) => response.json())
       .then((d) => {
-        if (dag_info.virtualDaaScore > 17500000) {
-          setBlockReward(((d.blockreward * 0.95)).toFixed(2));
-        } else {
-          setBlockReward(d.blockreward.toFixed(2));
-        }
+        // The miner's part: the dev fee is paid only up to the v12 hard fork.
+        setBlockReward((d.blockreward * minerShareAt(dag_info.virtualDaaScore)).toFixed(2));
       })
       .catch((err) => {});
   }
