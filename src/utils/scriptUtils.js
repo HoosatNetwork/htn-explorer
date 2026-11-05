@@ -133,7 +133,8 @@ const OPCODE_NAMES = {
   0xa5: "OP_WITHIN",
 
   // Crypto opcodes (Hoosat/HTND).
-  0xa6: "OP_UNKNOWN166",
+  // OP_UNKNOWN166 before HTND's ML-DSA-44 fork; named as forked nodes name it.
+  0xa6: "OP_CHECKSIGMLDSA44",
   0xa7: "OP_UNKNOWN167",
   0xa8: "OP_SHA256",
   0xa9: "OP_CHECKMULTISIGECDSA",
@@ -269,9 +270,68 @@ const opNToInt = (opName) => {
   return parseInt(opName.replace("OP_", ""), 10);
 };
 
-// Hoosat/Kaspa typically uses 32-byte public keys (Schnorr),
-// but we also support Bitcoin-like 33/65 byte pubkeys.
-const isLikelyPubKeySize = (n) => n === 32 || n === 33 || n === 65;
+// ML-DSA-44 (FIPS 204) sizes as HTND checks them: a 1312-byte public key and
+// a 2420-byte signature, pushed with its sighash type byte (2421 bytes). These
+// are the only two pushes HTND exempts from the 520-byte element limit.
+export const MLDSA44_PUBLIC_KEY_SIZE = 1312;
+export const MLDSA44_SIGNATURE_PUSH_SIZE = 2421;
+
+// The public key sizes a locking script can carry: 32-byte keys (Schnorr),
+// 33-byte ECDSA keys, and Bitcoin-like 65-byte keys.
+const isScriptPubKeySize = (n) => n === 32 || n === 33 || n === 65;
+
+// The public key sizes an unlocking script can carry: the above plus
+// ML-DSA-44 keys, which a spend reveals next to its signature.
+const isLikelyPubKeySize = (n) => isScriptPubKeySize(n) || n === MLDSA44_PUBLIC_KEY_SIZE;
+
+const CHECKSIG_FORMATS = {
+  OP_CHECKSIG: "blake2b-32",
+  OP_CHECKSIGECDSA: "blake2b-32 (ecdsa)",
+  OP_CHECKSIGMLDSA44: "blake2b-32 (ml-dsa-44)",
+};
+
+// HTND's ML-DSA-44 multisig redeem script (txscript mldsa44_multisig.go): for
+// each of n key hashes
+//   OP_IF OP_DUP OP_BLAKE2B <32-byte key hash> OP_EQUALVERIFY
+//   OP_CHECKSIGMLDSA44 OP_ELSE OP_0 OP_ENDIF OP_TOALTSTACK
+// then OP_FROMALTSTACK (OP_FROMALTSTACK OP_ADD)*(n-1) <m> OP_GREATERTHANOREQUAL,
+// with 2 <= n <= 11 and 1 <= m <= min(2, n). Returns { m, n, pubKeyHashes } or
+// null, as ExtractMultiSigMLDSA44RedeemScript accepts or refuses it.
+const MLDSA44_MULTISIG_KEY_BLOCK = [
+  "OP_IF",
+  "OP_DUP",
+  "OP_BLAKE2B",
+  "OP_DATA_32",
+  "OP_EQUALVERIFY",
+  "OP_CHECKSIGMLDSA44",
+  "OP_ELSE",
+  "OP_0",
+  "OP_ENDIF",
+  "OP_TOALTSTACK",
+];
+
+const parseMldsa44MultiSig = (opcodes) => {
+  const keyCount = Math.floor((opcodes.length - 1) / 12);
+  if (keyCount < 2 || keyCount > 11 || opcodes.length !== keyCount * 12 + 1) return null;
+
+  const blockLength = MLDSA44_MULTISIG_KEY_BLOCK.length;
+  const pubKeyHashes = [];
+  for (let i = 0; i < keyCount; i++) {
+    for (let j = 0; j < blockLength; j++) {
+      if (opcodes[i * blockLength + j].name !== MLDSA44_MULTISIG_KEY_BLOCK[j]) return null;
+    }
+    pubKeyHashes.push(opcodes[i * blockLength + 3].dataHex);
+  }
+
+  const tail = opcodes.slice(keyCount * blockLength).map((o) => o.name);
+  if (tail[0] !== "OP_FROMALTSTACK") return null;
+  for (let i = 1; i < keyCount; i++) {
+    if (tail[2 * i - 1] !== "OP_FROMALTSTACK" || tail[2 * i] !== "OP_ADD") return null;
+  }
+  const m = opNToInt(tail[tail.length - 2]);
+  if (m === null || m > 2 || m > keyCount || tail[tail.length - 1] !== "OP_GREATERTHANOREQUAL") return null;
+  return { m, n: keyCount, pubKeyHashes };
+};
 
 const redeemLooksLikeScript = (redeemScriptHex) => {
   if (!redeemScriptHex) return false;
@@ -284,6 +344,7 @@ const redeemLooksLikeScript = (redeemScriptHex) => {
     (n) =>
       n === "OP_CHECKSIG" ||
       n === "OP_CHECKSIGECDSA" ||
+      n === "OP_CHECKSIGMLDSA44" ||
       n === "OP_CHECKMULTISIG" ||
       n === "OP_CHECKMULTISIGECDSA" ||
       n === "OP_IF" ||
@@ -442,8 +503,8 @@ export const detectScriptPattern = (scriptHex) => {
       return { type: "OP_RETURN", details: {}, matchType: "exact", confidence: 1 };
     }
 
-    // Hoosat pubkeyhash (address): OP_DUP OP_BLAKE2B PUSH(32) <32-byte> OP_EQUALVERIFY OP_CHECKSIG
-    // (Also support OP_CHECKSIGECDSA variant)
+    // Hoosat pubkeyhash (address): OP_DUP OP_BLAKE2B PUSH(32) <32-byte> OP_EQUALVERIFY OP_CHECKSIG,
+    // OP_CHECKSIGECDSA for ECDSA keys and OP_CHECKSIGMLDSA44 for ML-DSA-44 keys (HTND standard.go).
     if (
       names.length === 5 &&
       names[0] === "OP_DUP" &&
@@ -451,14 +512,14 @@ export const detectScriptPattern = (scriptHex) => {
       opcodes[2]?.pushSize === 32 &&
       !!opcodes[2]?.dataHex &&
       names[3] === "OP_EQUALVERIFY" &&
-      (names[4] === "OP_CHECKSIG" || names[4] === "OP_CHECKSIGECDSA")
+      Object.prototype.hasOwnProperty.call(CHECKSIG_FORMATS, names[4])
     ) {
       return {
         type: "P2PKH",
         details: {
           pubKeyHash: opcodes[2].dataHex,
           hashAlgo: "blake2b-256",
-          format: names[4] === "OP_CHECKSIGECDSA" ? "blake2b-32 (ecdsa)" : "blake2b-32",
+          format: CHECKSIG_FORMATS[names[4]],
         },
         matchType: "exact",
         confidence: 1,
@@ -529,7 +590,7 @@ export const detectScriptPattern = (scriptHex) => {
     if (
       names.length === 2 &&
       opcodes[0]?.pushSize &&
-      isLikelyPubKeySize(opcodes[0].pushSize) &&
+      isScriptPubKeySize(opcodes[0].pushSize) &&
       !!opcodes[0]?.dataHex &&
       (names[1] === "OP_CHECKSIG" || names[1] === "OP_CHECKSIGECDSA")
     ) {
@@ -552,7 +613,7 @@ export const detectScriptPattern = (scriptHex) => {
       const n = opNToInt(names[names.length - 2]);
 
       const pubkeyOps = opcodes.slice(1, -2);
-      const pubkeys = pubkeyOps.filter((o) => !!o.dataHex && isLikelyPubKeySize(o.pushSize)).map((o) => o.dataHex);
+      const pubkeys = pubkeyOps.filter((o) => !!o.dataHex && isScriptPubKeySize(o.pushSize)).map((o) => o.dataHex);
 
       if (m !== null && n !== null && pubkeys.length === pubkeyOps.length && pubkeys.length === n) {
         return {
@@ -572,30 +633,57 @@ export const detectScriptPattern = (scriptHex) => {
       };
     }
 
+    // ML-DSA-44 multisig redeem script (paid to through P2SH).
+    const mldsaMultiSig = parseMldsa44MultiSig(opcodes);
+    if (mldsaMultiSig) {
+      return {
+        type: "P2MS",
+        details: { ...mldsaMultiSig, format: `${mldsaMultiSig.m}-of-${mldsaMultiSig.n} (ml-dsa-44)` },
+        matchType: "exact",
+        confidence: 1,
+      };
+    }
+
     // Signature script heuristics (useful for Inputs tab)
-    // Typical P2PK sigScript: <sig>
+    // Typical P2PK sigScript: <sig>, a Schnorr/ECDSA signature or a 2421-byte
+    // ML-DSA-44 one (2420 bytes + sighash type).
     // (We keep this heuristic narrow; many scripts are just pushes.)
-    if (opcodes.length === 1 && opcodes[0]?.dataHex && opcodes[0]?.pushSize >= 60 && opcodes[0]?.pushSize <= 80) {
+    const isMldsaSig = (op) => op?.pushSize === MLDSA44_SIGNATURE_PUSH_SIZE;
+    if (
+      opcodes.length === 1 &&
+      opcodes[0]?.dataHex &&
+      ((opcodes[0]?.pushSize >= 60 && opcodes[0]?.pushSize <= 80) || isMldsaSig(opcodes[0]))
+    ) {
       return {
         type: "P2PK Unlock",
-        details: { signatureBytes: opcodes[0].pushSize },
+        details: { signatureBytes: opcodes[0].pushSize, ...(isMldsaSig(opcodes[0]) ? { format: "ml-dsa-44" } : {}) },
         matchType: "heuristic",
         confidence: 0.6,
       };
     }
 
-    // Typical P2PKH sigScript: <sig> <pubkey>
+    // Typical P2PKH sigScript: <sig> <pubkey>; for ML-DSA-44 a 2421-byte
+    // signature and a 1312-byte public key, each pushed with OP_PUSHDATA2.
     if (opcodes.length === 2 && opcodes[0]?.dataHex && opcodes[1]?.dataHex && isLikelyPubKeySize(opcodes[1].pushSize)) {
-      return { type: "P2PKH Unlock", details: {}, matchType: "heuristic", confidence: 0.7 };
+      const mldsa = isMldsaSig(opcodes[0]) && opcodes[1].pushSize === MLDSA44_PUBLIC_KEY_SIZE;
+      return {
+        type: "P2PKH Unlock",
+        details: mldsa ? { format: "ml-dsa-44", signatureBytes: opcodes[0].pushSize } : {},
+        matchType: "heuristic",
+        confidence: 0.7,
+      };
     }
 
     // Typical multisig (P2MS) unlock in a P2SH sigScript: OP_0 <sig>... <redeemScript>
     // If the redeemScript decodes as a bare multisig script, label it explicitly.
-    if (names[0] === "OP_0" && opcodes.length >= 3) {
+    // An ML-DSA-44 multisig unlock has no leading OP_0: per key, last key
+    // first, <sig> <pubkey> OP_1 for a signer and OP_0 for a non-signer.
+    if (opcodes.length >= 2) {
       const redeem = extractRedeemScript(hex);
       if (redeem && redeemLooksLikeScript(redeem)) {
         const redeemPat = _detect(redeem, depth + 1);
-        if (redeemPat?.type === "P2MS") {
+        const isMldsaMultiSig = redeemPat?.type === "P2MS" && Array.isArray(redeemPat.details?.pubKeyHashes);
+        if (redeemPat?.type === "P2MS" && ((names[0] === "OP_0" && opcodes.length >= 3) || isMldsaMultiSig)) {
           return {
             type: "P2MS Unlock",
             details: { ...redeemPat.details, redeemScriptBytes: redeem.length / 2 },

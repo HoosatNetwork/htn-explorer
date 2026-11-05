@@ -6,7 +6,14 @@ import CopyButton from "./CopyButton";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
 
-import { blake2b256Hex, detectScriptPattern, disassembleScript, extractRedeemScript } from "../utils/scriptUtils";
+import {
+  blake2b256Hex,
+  detectScriptPattern,
+  disassembleScript,
+  extractRedeemScript,
+  MLDSA44_PUBLIC_KEY_SIZE,
+  MLDSA44_SIGNATURE_PUSH_SIZE,
+} from "../utils/scriptUtils";
 
 const findOutputByIndex = (outputs, index) => {
   if (!Array.isArray(outputs)) return null;
@@ -147,11 +154,24 @@ const classifyPush = (pushOp, pushIndex, totalPushes, context = {}) => {
   const hex = pushOp.dataHex || "";
   const patternType = context?.pattern?.type;
 
+  // An ML-DSA-44 key or signature: HTND lets only these two sizes past the
+  // 520-byte push limit. Checked before the redeem script test, because the
+  // key is the last push of a P2PKH unlock and its random bytes would often
+  // disassemble to some OP_CHECKSIG.
+  if (size === MLDSA44_PUBLIC_KEY_SIZE) return "pubkey (ml-dsa-44)";
+  if (size === MLDSA44_SIGNATURE_PUSH_SIZE) return "signature (ml-dsa-44)";
+
   // Redeem script tends to be the last push in a P2SH unlock.
   if (pushIndex === totalPushes - 1) {
     const redeemDis = disassembleScript(hex);
     if (
-      redeemDis.opcodes.some((o) => o.name === "OP_CHECKSIG" || o.name === "OP_CHECKMULTISIG" || o.name === "OP_IF")
+      redeemDis.opcodes.some(
+        (o) =>
+          o.name === "OP_CHECKSIG" ||
+          o.name === "OP_CHECKSIGMLDSA44" ||
+          o.name === "OP_CHECKMULTISIG" ||
+          o.name === "OP_IF",
+      )
     ) {
       return "redeemScript";
     }
