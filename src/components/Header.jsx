@@ -17,7 +17,7 @@ const Header = ({ price, isConnected }) => {
   const walletOptions = [
     {
       name: 'Web Wallet',
-      href: 'https://wallet.hoosat.fi',
+      href: '/',
       icon: FaGlobe,
       description: 'Access via browser'
     },
@@ -29,7 +29,7 @@ const Header = ({ price, isConnected }) => {
     },
     {
       name: 'Desktop Wallet',
-      href: 'https://github.com/Hoosat-Oy/hoosat-tauri-wallet/releases',
+      href: '/',
       icon: FaDesktop,
       description: 'Windows, macOS, Linux'
     },
@@ -47,7 +47,7 @@ const Header = ({ price, isConnected }) => {
     },
     {
       name: 'Ledger Vault',
-      href: 'https://vault.hoosat.fi/',
+      href: '/',
       icon: FaWallet,
       description: 'Hardware wallet support'
     },
@@ -133,7 +133,7 @@ const Header = ({ price, isConnected }) => {
           {/* Desktop Navigation */}
           <div className="hidden xl:flex items-center space-x-8">
             <a
-              href={process.env.REACT_APP_HOMEPAGE}
+              href="/"
               className="text-slate-300 hover:text-hoosat-teal transition-colors duration-200 no-underline"
             >
               Home
@@ -324,7 +324,7 @@ const Header = ({ price, isConnected }) => {
                 </div>
 
                 <a
-                  href={process.env.REACT_APP_HOMEPAGE}
+                  href="/"
                   className="py-2 text-slate-300 hover:text-hoosat-teal transition-colors duration-200 no-underline block text-left"
                   onClick={() => setIsOpen(false)}
                   style={{ textDecoration: 'none' }}
