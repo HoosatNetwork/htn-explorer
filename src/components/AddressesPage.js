@@ -29,15 +29,14 @@ const AddressesPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [circCoins, setCircCoins] = useState(0);
   const [addresses, setAddresses] = useState([]);
-  const [yAddresses, setYAddresses] = useState([]);
+  const [summary, setSummary] = useState(null);
+  const [tagsVersion, setTagsVersion] = useState(0);
   const [loading, setLoading] = useState(true);
   const currentPage = parseInt(searchParams.get('page') || '1', 10);
   const [rowsPerPage] = useState(25); // You can change this number to set rows per page
   const [chartData, setChartData] = useState([]);
   const [holdingData, setHoldingData] = useState([]);
-  const [totalPages, setTotalPages] = useState([]);
-  const [startPage, setStartPage] = useState([]);
-  const [endPage, setEndPage] = useState([]);
+  const [totalPages, setTotalPages] = useState(0);
   const { width } = useWindowSize();
 
   // Set initial page parameter if not present
@@ -48,56 +47,21 @@ const AddressesPage = () => {
   }, [searchParams, setSearchParams]);
 
   const calculateCharts = useCallback(
-    (addresses) => {
-      const holdingRanges = {
-        "Top 10": 0,
-        "Top 100": 0,
-        "Top 1000": 0,
-        "Top 10000": 0,
-      };
+    (summary) => {
+      const holdingPercentage = {};
+      [["Top 10", "top10"], ["Top 100", "top100"], ["Top 1000", "top1000"], ["Top 10000", "top10000"]].forEach(
+        ([label, key]) => {
+          holdingPercentage[label] = (summary.holding_sompi[key] / 100000000 / parseFloat(circCoins)) * 100;
+        }
+      );
       const balanceRanges = {
-        "More than 10,000,000": 0,
-        "More than 1,000,000": 0,
-        "More than 100,000": 0,
-        "More than 10,000": 0,
-        "More than 1,000": 0,
-        "Less than 1,000": 0,
+        "More than 10,000,000": summary.ranges.gt_10m,
+        "More than 1,000,000": summary.ranges.gt_1m,
+        "More than 100,000": summary.ranges.gt_100k,
+        "More than 10,000": summary.ranges.gt_10k,
+        "More than 1,000": summary.ranges.gt_1k,
+        "Less than 1,000": summary.ranges.lt_1k,
       };
-      addresses.forEach((address, index) => {
-        const balance = parseFloat(address.balance);
-        if (index <= 10) {
-          holdingRanges["Top 10"] += balance;
-        } else if (index > 10 && index <= 100) {
-          holdingRanges["Top 100"] += balance;
-        } else if (index > 100 && index <= 1000) {
-          holdingRanges["Top 1000"] += balance;
-        } else if (index > 1000 && index <= 10000) {
-          holdingRanges["Top 10000"] += balance;
-        }
-      });
-      const holdingPercentage = {
-        "Top 10": (holdingRanges["Top 10"] / parseFloat(circCoins)) * 100,
-        "Top 100": (holdingRanges["Top 100"] / parseFloat(circCoins)) * 100,
-        "Top 1000": (holdingRanges["Top 1000"] / parseFloat(circCoins)) * 100,
-        "Top 10000": (holdingRanges["Top 10000"] / parseFloat(circCoins)) * 100,
-      };
-
-      addresses.forEach((address) => {
-        const balance = parseInt(address.balance);
-        if (balance >= 10000000) {
-          balanceRanges["More than 10,000,000"]++;
-        } else if (balance >= 1000000 && balance < 10000000) {
-          balanceRanges["More than 1,000,000"]++;
-        } else if (balance >= 100000 && balance < 1000000) {
-          balanceRanges["More than 100,000"]++;
-        } else if (balance >= 10000 && balance < 100000) {
-          balanceRanges["More than 10,000"]++;
-        } else if (balance >= 1000 && balance < 10000) {
-          balanceRanges["More than 1,000"]++;
-        } else if (balance >= 1 && balance < 1000) {
-          balanceRanges["Less than 1,000"]++;
-        }
-      });
       const colors = ["#FF5733", "#FFC300", "#33FF57", "#33AFFF", "#B233FF", "#FF3399"];
       const holdingData = [
         {
@@ -161,10 +125,10 @@ const AddressesPage = () => {
   );
 
   useEffect(() => {
-    if (yAddresses.length > 0) {
-      calculateCharts(yAddresses);
+    if (summary) {
+      calculateCharts(summary);
     }
-  }, [yAddresses, calculateCharts]);
+  }, [summary, calculateCharts]);
 
   useEffect(() => {
     const fetchCircCoins = async () => {
@@ -178,29 +142,21 @@ const AddressesPage = () => {
     const fetchAddressBalancesForPage = async () => {
       try {
         const response = await fetch(
-          `https://api.network.hoosat.fi/addresses/balances/csv/paged?page=${currentPage}&items_per_page=${rowsPerPage}`
+          `${process.env.REACT_APP_API}/addresses/balances/csv/paged-with-yesterday?page=${currentPage}&items_per_page=${rowsPerPage}`
         );
         const data = await response.text();
         const rows = data.trim().split("\n").slice(1);
-        const parsedAddresses = rows.map((row, index) => {
-          const [address, balance] = row.split(",");
+        const balanceChanges = rows.map((row, index) => {
+          const [address, balance, yesterday] = row.split(",");
+          const current = parseFloat(balance) / 100000000;
+          const yesterdayBalance = yesterday ? parseFloat(yesterday) / 100000000 : undefined;
+          const change = yesterdayBalance !== undefined ? current - yesterdayBalance : 0;
           return {
-            index: index * currentPage,
-            address,
-            balance: parseFloat(balance) / 100000000,
-          };
-        });
-        const yesterdayBalancesMap = new Map(yAddresses.map((item) => [item.address, item.balance]));
-        const balanceChanges = parsedAddresses.map((address, index) => {
-          const yesterdayBalance = yesterdayBalancesMap.get(address.address);
-          const tag = tags.get(address.address);
-          let change = yesterdayBalance !== undefined ? address.balance - yesterdayBalance : 0;
-          return {
-            index: (currentPage - 1) * rowsPerPage + index,
-            address: address.address,
-            balance: address.balance,
+            index: (currentPage - 1) * rowsPerPage + index + 1,
+            address: address,
+            balance: current,
             change: change,
-            tag: tag,
+            tag: tags.get(address),
           };
         });
         setAddresses(balanceChanges);
@@ -214,12 +170,12 @@ const AddressesPage = () => {
       fetchAddressBalancesForPage();
     }, 60000);
     return () => clearInterval(interval);
-  }, [yAddresses, currentPage, rowsPerPage]);
+  }, [tagsVersion, currentPage, rowsPerPage]);
 
   useEffect(() => {
     const addTagAddressesFromFile = async (tag) => {
       try {
-        const response = await fetch(`https://network.hoosat.fi/downloads/tags/tags.csv`);
+        const response = await fetch(`${process.env.REACT_APP_API}/addresses/tags/csv`);
         const addressesResponse = await response.text();
         const addressesRows = addressesResponse.trim().split("\n");
         const parsedAddresses = addressesRows.map((row, _) => {
@@ -228,43 +184,36 @@ const AddressesPage = () => {
         parsedAddresses.forEach((address) => {
           tags.set(address[0].trim(), address[1].trim());
         });
+        setTagsVersion((v) => v + 1);
       } catch (error) {
         // Error handling
       }
     };
-    const fetchYesterdaysCSV = async () => {
+    const fetchSummary = async () => {
       try {
-        const responseYesterdays = await fetch("https://shitlist.hoosat.fi/balances-yesterday.csv");
-        const dataYesterdays = await responseYesterdays.text();
-        const rowsYesterdays = dataYesterdays.trim().split("\n").slice(1);
-        const parsedYesterdays = rowsYesterdays.map((row, index) => {
-          const [address, balance] = row.split(",");
-          return { index, address, balance: parseFloat(balance) / 100000000 };
-        });
-        setYAddresses(parsedYesterdays);
-        setTotalPages(Math.ceil(parsedYesterdays.length));
+        const response = await fetch(`${process.env.REACT_APP_API}/addresses/balances/summary`);
+        const data = await response.json();
+        setSummary(data);
+        setTotalPages(Math.ceil(data.total_addresses / rowsPerPage));
       } catch (error) {
         setLoading(false);
       }
     };
     addTagAddressesFromFile();
-    fetchYesterdaysCSV();
+    fetchSummary();
   }, []);
 
   const handlePageChange = (pageNumber) => {
-    setSearchParams({ page: pageNumber.toString() }, { replace: true });
+    setSearchParams({ page: pageNumber.toString() });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  useEffect(() => {
-    let startPage = Math.max(1, currentPage - 4);
-    let endPage = Math.min(startPage + 9, totalPages);
-    if (endPage === totalPages) {
-      startPage = Math.max(1, endPage - 9);
-    }
-    setStartPage(startPage);
-    setEndPage(endPage);
-  }, [totalPages, currentPage]);
+  let startPage = Math.max(1, currentPage - 4);
+  const endPage = Math.min(startPage + 9, totalPages);
+  if (endPage === totalPages) {
+    startPage = Math.max(1, endPage - 9);
+  }
+  const showLoading = loading || totalPages < 1;
 
   return (
     <div className="blocks-page">
@@ -274,7 +223,7 @@ const AddressesPage = () => {
             <h4 className="block-overview-header mb-0 pb-0 d-flex align-items-center gap-2">
               Addresses and Balances
             </h4>
-            {!loading && (
+            {!showLoading && (
               <Pagination size="sm">
                 <Pagination.First onClick={() => handlePageChange(1)} disabled={currentPage === 1} />
                 <Pagination.Prev onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1} />
@@ -301,7 +250,7 @@ const AddressesPage = () => {
               </Pagination>
             )}
           </div>
-          {loading ? (
+          {showLoading ? (
             <TableSkeleton lines={25} />
           ) : (
             <div className="w-100">
