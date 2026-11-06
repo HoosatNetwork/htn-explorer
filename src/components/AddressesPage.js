@@ -142,7 +142,7 @@ const AddressesPage = () => {
     const fetchAddressBalancesForPage = async () => {
       try {
         const response = await fetch(
-          `https://api-two.network.hoosat.fi/addresses/balances/csv/paged-with-yesterday?page=${currentPage}&items_per_page=${rowsPerPage}`
+          `${process.env.REACT_APP_API}/addresses/balances/csv/paged-with-yesterday?page=${currentPage}&items_per_page=${rowsPerPage}`
         );
         const data = await response.text();
         const rows = data.trim().split("\n").slice(1);
@@ -152,7 +152,7 @@ const AddressesPage = () => {
           const yesterdayBalance = yesterday ? parseFloat(yesterday) / 100000000 : undefined;
           const change = yesterdayBalance !== undefined ? current - yesterdayBalance : 0;
           return {
-            index: (currentPage - 1) * rowsPerPage + index,
+            index: (currentPage - 1) * rowsPerPage + index + 1,
             address: address,
             balance: current,
             change: change,
@@ -175,7 +175,7 @@ const AddressesPage = () => {
   useEffect(() => {
     const addTagAddressesFromFile = async (tag) => {
       try {
-        const response = await fetch(`https://api-two.network.hoosat.fi/addresses/tags/csv`);
+        const response = await fetch(`${process.env.REACT_APP_API}/addresses/tags/csv`);
         const addressesResponse = await response.text();
         const addressesRows = addressesResponse.trim().split("\n");
         const parsedAddresses = addressesRows.map((row, _) => {
@@ -191,7 +191,7 @@ const AddressesPage = () => {
     };
     const fetchSummary = async () => {
       try {
-        const response = await fetch("https://api-two.network.hoosat.fi/addresses/balances/summary");
+        const response = await fetch(`${process.env.REACT_APP_API}/addresses/balances/summary`);
         const data = await response.json();
         setSummary(data);
         setTotalPages(Math.ceil(data.total_addresses / rowsPerPage));
