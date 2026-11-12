@@ -21,6 +21,7 @@ import TxPage from "./components/TxPage";
 import Dashboard from "./Dashboard";
 import AddressesPage from "./components/AddressesPage";
 import Header from "./components/Header";
+import { joinRoomsOnConnect } from "./socketRooms";
 
 const buildVersion = process.env.REACT_APP_VERCEL_GIT_COMMIT_SHA || "0.1.0";
 
@@ -73,12 +74,10 @@ function App() {
       socket.emit("join-room", "blocks");
     });
 
-    socket.emit("last-blocks", "");
-
     socket.on("bluescore", (e) => {
       setBlueScore(e.blueScore);
     });
-    socket.emit("join-room", "bluescore");
+    const leaveRooms = joinRoomsOnConnect(socket);
 
     socket.on("new-block", (d) => {
       setBlocks([...blocksRef.current, d].slice(-60));
@@ -86,6 +85,7 @@ function App() {
 
     return () => {
       clearInterval(intervalPrice);
+      leaveRooms();
       socket.off("connect");
       socket.off("disconnect");
       socket.off("last-blocks");
