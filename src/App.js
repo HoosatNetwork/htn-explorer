@@ -1,6 +1,6 @@
 import "bootstrap/dist/css/bootstrap.min.css";
 import "font-awesome/css/font-awesome.min.css";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Container, OverlayTrigger, Row, Col, Tooltip } from "react-bootstrap";
 import { BiDonateHeart } from "react-icons/bi";
 import { FaGithub } from "react-icons/fa";
@@ -22,6 +22,7 @@ import Dashboard from "./Dashboard";
 import AddressesPage from "./components/AddressesPage";
 import Header from "./components/Header";
 import { joinRoomsOnConnect } from "./socketRooms";
+import { mergeBlocks } from "./mergeBlocks";
 
 const buildVersion = process.env.REACT_APP_VERCEL_GIT_COMMIT_SHA || "0.1.0";
 
@@ -37,9 +38,6 @@ function App() {
   const [blocks, setBlocks] = useState([]);
   const [blueScore, setBlueScore] = useState(0);
   const [isConnected, setIsConnected] = useState();
-
-  const blocksRef = useRef(blocks);
-  blocksRef.current = blocks;
 
   const updatePrice = () => {
     fetch(`${process.env.REACT_APP_API}/info/market-data`, {
@@ -70,7 +68,7 @@ function App() {
     });
 
     socket.on("last-blocks", (e) => {
-      setBlocks(e);
+      setBlocks((current) => mergeBlocks(current, e));
       socket.emit("join-room", "blocks");
     });
 
@@ -80,7 +78,7 @@ function App() {
     const stopRejoiningRooms = joinRoomsOnConnect(socket);
 
     socket.on("new-block", (d) => {
-      setBlocks([...blocksRef.current, d].slice(-60));
+      setBlocks((current) => mergeBlocks(current, [d]));
     });
 
     return () => {
